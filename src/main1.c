@@ -30,9 +30,13 @@ uint8_t *spi_buffer_data = &spi_buffer[SPI_HEADER_NBYTES];
 
 uint8_t Verbose = 1;
 
-uint32_t adc_fs = 300000;
-uint32_t number_buffers_per_upload = 1024;
+//uint32_t adc_fs = 300000;
+uint32_t adc_fs = 150000;
+uint32_t number_buffers_per_upload = 512;
 
+int read_data(void);
+int upload_data(void);
+void update_spi_header(uint32_t count);
 void setup_rtc(void);
 
 static inline uint8_t checksum(uint8_t *data, uint32_t len)
@@ -43,12 +47,6 @@ static inline uint8_t checksum(uint8_t *data, uint32_t len)
 	while(nbytes--) sum += *buf++;
 	return(sum);
 }
-
-void configuration_menu(void)
-{
-
-}
-
 
 /**
  *  Configure UART console.
@@ -66,45 +64,28 @@ static void setup_console(void)
 	stdio_serial_init(CONF_UART, &uart_serial_options);
 }
 
-// 
-// Set System clock defined as: MCLK = XTAL * MUL / DIV / SYSCLK_PRES
-// XTAL = 10 MHz
-// Use master clock prescaler to 2 (SYSCLK_PRES_2)
-// - System clock 120 Mhz = 10Mhz * 24 / 1 / 2
-// - System clock 100 Mhz = 10Mhz * 20 / 1 / 2
-// - System clock 80 Mhz = 10Mhz * 16 / 1 / 2
-// - System clock 60 Mhz = 10Mhz * 12 / 1 / 2
-//
-void setup_system_clocks(uint32_t sclk)
-{
-	uint32_t xtal = BOARD_FREQ_MAINCK_XTAL;
-	uint32_t div = 1;
-	uint32_t mul = sclk * 2 * div / xtal;
+sd_card_info_t sd_card;
+uint32_t sd_write_addr = SD_CARD_START_BLOCK;
+uint32_t sd_read_addr = SD_CARD_START_BLOCK;
+uint32_t sd_start_addr = SD_CARD_START_BLOCK;
+uint32_t sd_end_addr =  0;
 	
-	/* Set flash wait state to max in case the below clock switching. */
-	system_init_flash(CHIP_FREQ_CPU_MAX);
+// nblocks_per_sector must be and even multiple of nblocks_per_buffer
+uint32_t nblocks_per_upload = 1024 * AK5552_BUFFER_NBLOCKS;
+uint32_t input_count = 0;
+uint32_t output_count = 0;
+uint8_t upload_to_pi = 0;
 
-	// CONFIG_SYSCLK_SOURCE == SYSCLK_SRC_PLLACK
-	struct pll_config pllcfg;
-	pll_enable_source(PLL_SRC_MAINCK_XTAL);
-	pll_config_init(&pllcfg, PLL_SRC_MAINCK_XTAL, div, mul);
-	pll_enable(&pllcfg, 0);
-	pll_wait_for_lock(0);
-	pmc_switch_mck_to_pllack(SYSCLK_PRES_2); // prescaler 2
-	
-	printf("Clock configuration: sclk = %lu, mul = %lu, div=%lu,\n\r", sclk, mul, div);
-		
-	/* Update the SystemFrequency variable */
-	SystemCoreClockUpdate();
+#define READING 0x01
+#define UPLOADING 0x02
 
-	/* Set a flash wait state depending on the new cpu frequency */
-	system_init_flash(sysclk_get_cpu_hz());
+#define POWER_OFF 0x10
+#define READY 0x20
+#define BOOTING 0x40
+#define SHUTTING_DOWN 0x80
 
-	// Turns off the USB clock, does not switch off the PLL.	
-	//pmc_disable_udpck();
-
-}
-
+uint8_t sys_state = READING;
+uint8_t pi_state = POWER_OFF;
 
 int main (void)
 {
@@ -127,20 +108,17 @@ int main (void)
 	/* Output header string  */
     fprintf(stdout, "-- RockHopper V1.0 --\r\n" );
 	fprintf(stdout, "-- Compiled: "__DATE__ " "__TIME__ " --\r\n");
-
-	configuration_menu();
 	
 	setup_rtc();
 	
 	/* Initialize SD MMC stack */
-	sd_card_info_t sd;
-	if(sd_card_init(&sd) != SD_MMC_OK) {
+	if(sd_card_init(&sd_card) != SD_MMC_OK) {
 		printf("Init SD Card Failed\n\r");
 	}
 		
 	// Show SD card info.
-	if(sd.state == SD_MMC_OK) {
-		sd_card_print_info(&sd);
+	if(sd_card.state == SD_MMC_OK) {
+		sd_card_print_info(&sd_card);
 	}
 
 	// initialize adc	
@@ -150,34 +128,24 @@ int main (void)
 	printf("Init SSC DMA\n\r");
 	uint16_t nsamps = ak5552_init_dma();
 
-	//uint32_t error = 0;
-	uint32_t write_addr = SD_CARD_START_BLOCK;
-	uint32_t read_addr = SD_CARD_START_BLOCK;
+	nblocks_per_upload = number_buffers_per_upload * AK5552_BUFFER_NBLOCKS;
+	sd_end_addr = sd_card.last_block;
+	sd_start_addr = sd_card.first_block;
 
-	uint32_t end_addr = sd.last_block;
-	uint32_t start_addr = sd.first_block;
-	
-	// nblocks_per_sector must be and even multiple of nblocks_per_buffer
-	uint32_t nblocks_per_upload = number_buffers_per_upload * AK5552_BUFFER_NBLOCKS;
-	uint32_t input_count = 0;
-	uint32_t output_count = 0;
-	uint8_t upload_to_pi = 0;
-	uint8_t pi_is_awake = 0;
-	uint8_t pi_is_asleep = 1;
-	
 	if(Verbose) {
-		printf("sd start_addr %lu \n\r", start_addr);
-		printf("sd end_addr %lu \n\r", end_addr);
+		printf("sd start_addr %lu \n\r", sd_start_addr);
+		printf("sd end_addr %lu \n\r", sd_end_addr);
 		printf("nblocks_per_spi_buffer %lu \n\r", SPI_DATA_NBLOCKS);
 		printf("nblocks_per_adc_buffer %lu \n\r", AK5552_BUFFER_NBLOCKS);
 		printf("nblocks_per_upload %lu \n\r", nblocks_per_upload);	
 	} 
 
-	ioport_set_pin_level(PIN_ENABLE_3V3_OUT, 0);
-	ioport_set_pin_level(PIN_ENABLE_5V_OUT, 0);
 	ioport_set_pin_level(PIN_ENABLE_ADC, 1);
 	ioport_set_pin_level(PIN_ENABLE_TVDD, 1);
 //	ioport_set_pin_level(PIN_PREAMP_SHDN, 1);
+
+	ioport_set_pin_level(PIN_ENABLE_3V3_OUT, 0);
+	ioport_set_pin_level(PIN_ENABLE_5V_OUT, 0);
 	
 	ioport_set_pin_level(LED_PIN, LED_ON);
 	delay_ms(1000);
@@ -190,98 +158,136 @@ int main (void)
 	int go = 1;
 
 	// throw away the first adc buffer
-	while( ak5552_read_dma(adc_buffer_header, adc_buffer_data, 0) == 0 ) {}
+	while( ak5552_read_dma(adc_buffer_header, adc_buffer_data) == 0 ) {}
+
+	sys_state = READING;
+	pi_state = POWER_OFF;
 
 	while (go) {
+
+		read_data();
 		
-		if( ak5552_read_dma(adc_buffer_header, adc_buffer_data) == AK5552_NUM_SAMPLES ) {
+		if( upload_data() == 0 ) {
+			// sleep between dma buffers, the next dma interrupt will wake from sleep
+			//pmc_sleep(SAM_PM_SMODE_SLEEP_WFI);
+		}
+		
+	}
+
+}
+
+
+int read_data(void)
+{	
+	uint16_t nsamps = 0;
+	
+	if( sys_state & READING ) {
+		
+		nsamps = ak5552_read_dma(adc_buffer_header, adc_buffer_data);
+
+		if( nsamps == AK5552_NUM_SAMPLES ) {
 
 			ioport_toggle_pin_level(LED_PIN);
 
-			result = sd_card_write_raw(&sd, adc_buffer, AK5552_BUFFER_NBLOCKS, write_addr);
-			
+			int result = sd_card_write_raw(&sd_card, adc_buffer, AK5552_BUFFER_NBLOCKS, sd_write_addr);
+
 			if( result == SD_MMC_OK ) {
-				write_addr +=  AK5552_BUFFER_NBLOCKS;
-				if(write_addr >= end_addr) write_addr = start_addr; 
+				sd_write_addr +=  AK5552_BUFFER_NBLOCKS;
+				if(sd_write_addr >= sd_end_addr) sd_write_addr = sd_start_addr;
 				input_count += AK5552_BUFFER_NBLOCKS;
-				if( input_count == nblocks_per_upload ) {
-					input_count = 0;
-					upload_to_pi = 1;
-					printf("Ready to upload %lu blocks: read addr 0x%x, write addr 0x%x \n\r",
-						nblocks_per_upload, read_addr, write_addr);
-				}
-
 			} else {
-				printf("sd_card_write_raw: 0x%x \n\r", result);
+				printf("sd_card_write_raw: 0x%x.\n\r", result);
 			}
 			
-		}
-		
-		if( upload_to_pi ) {
-			
-			if (ioport_get_pin_level(PI_ON_PIN) == IOPORT_PIN_LEVEL_HIGH) {
-				pi_is_ready = 1;
-			} else {
-				pi_is_ready = 0;
+			if( input_count == nblocks_per_upload ) {
+				input_count = 0;
+				//sys_state = READING & UPLOADING; // continue reading while uploading
+				sys_state = UPLOADING;  // stop reading while uploading
+				printf("Ready to upload %lu blocks: read addr 0x%x, write addr 0x%x.\n\r",
+				   nblocks_per_upload, sd_read_addr, sd_write_addr);
 			}
-			
-			if( !pi_is_awake ) {
-				// turn the PI ON
-				ioport_set_pin_level(PIN_ENABLE_5V_OUT, 1);
-				printf("Waking up PI\r\n");
-			}
-
-			// if PI is awake
-			if ( pi_is_awake ) {
-				
-				if( output_count == 0 ) {
-					printf("Starting upload to PI\r\n");
-				}
-				
-				result = sd_card_read_raw(&sd, spi_buffer_data, SPI_DATA_NBLOCKS, read_addr);
-
-				if( result == SD_MMC_OK ) {
-				
-					ioport_toggle_pin_level(LED_PIN);
-				
-					update_spi_header(output_count + SPI_DATA_NBLOCKS);
-
-					// write padded buffer to SPI port
-					result = spi_slave_write_wait((void *)spi_buffer, SPI_BUFFER_NBYTES);
-				
-					if( result == STATUS_OK ) {
-						read_addr += SPI_DATA_NBLOCKS;
-						if(read_addr >= end_addr) read_addr = start_addr;
-						output_count += SPI_DATA_NBLOCKS;
-						// if upload is finished
-					} else {
-						printf("spi_slave_write_wait error 0x%x \n\r", result);
-					}
-			
-					if( output_count == nblocks_per_upload ) {
-						printf("Finished uploading %lu blocks to PI\n\r", output_count);
-						output_count = 0;
-						upload_to_pi = 0;
-					}
-
-				}
-				 
-			}		
-		
-		} else {	// sleep between dma buffers
-			pmc_sleep(SAM_PM_SMODE_SLEEP_WFI);	// the dma interrupt wakes this
 		}
-		
-
-		// shutoff PI, but wait for it to be ready
-		printf("Shutdown PI ... ");
-		// wait for the PI to signal that it's OK to shutdown power
-		if(ioport_get_pin_level(PI_ON_PIN) == IOPORT_PIN_LEVEL_HIGH) {
-			ioport_set_pin_level(PIN_ENABLE_5V_OUT, 1);
-		}
-		printf("done\n\r");
-
 	}
+	
+	return(nsamps);
+}
+
+int upload_data(void)
+{
+	// shutoff PI, but wait for the PI to signal that it's OK to shutdown power
+	// this happens after uploading has finished
+	if( pi_state == SHUTTING_DOWN ) {
+		if ( ioport_get_pin_level(PI_ON_PIN) == IOPORT_PIN_LEVEL_LOW ) {
+			printf("Shutting down PI.\r\n");
+			ioport_set_pin_level(PIN_ENABLE_5V_OUT, 0);
+			pi_state = POWER_OFF;
+		}
+		return(0);
+	}
+	
+	// 
+	if ( (sys_state & UPLOADING) == 0 ) return(0);
+
+	if ( pi_state == POWER_OFF ) {
+		if ( ioport_get_pin_level(PI_ON_PIN) == IOPORT_PIN_LEVEL_LOW ) {
+			printf("Waking up PI ... ");
+			ioport_set_pin_level(PIN_ENABLE_5V_OUT, 1); // turn the PI ON
+			pi_state = BOOTING;
+		}
+		return(0);
+	}
+	
+	if ( pi_state == BOOTING)  {
+		if ( ioport_get_pin_level(PI_ON_PIN) == IOPORT_PIN_LEVEL_HIGH ) {
+			printf("ready.\r\n");
+			// initialize SPI slave to transfer data to the PI which is a spi master
+			spi_slave_initialize();
+			//delay_ms(100);
+			pi_state = READY;
+		}
+		return(0);
+	}
+	
+	// if PI is ready
+	if ( pi_state == READY ) {
+				
+		if( output_count == 0 ) {
+			printf("Starting upload to PI.\r\n");
+		}
+				
+		int result = sd_card_read_raw(&sd_card, spi_buffer_data, SPI_DATA_NBLOCKS, sd_read_addr);
+
+		if( result == SD_MMC_OK ) {
+					
+			ioport_toggle_pin_level(LED_PIN);
+					
+			update_spi_header(output_count + SPI_DATA_NBLOCKS);
+					
+			// write padded buffer to SPI port
+			result = spi_slave_write_wait((void *)spi_buffer, SPI_BUFFER_NBYTES);
+					
+			if( result == STATUS_OK ) {
+				sd_read_addr += SPI_DATA_NBLOCKS;
+				if(sd_read_addr >= sd_end_addr) sd_read_addr = sd_start_addr;
+				output_count += SPI_DATA_NBLOCKS;
+			} else {
+				printf("spi_slave_write_wait error 0x%x.\n\r", result);
+			}
+					
+			if( output_count == nblocks_per_upload ) {
+				printf("Finished uploading %lu blocks to PI.\n\r", output_count);
+				output_count = 0;
+				sys_state = READING;
+				pi_state = SHUTTING_DOWN;
+			}
+
+		}
+		
+		return(output_count);
+	}
+	
+	printf("Unknown state %d.\r\n", pi_state);
+	return(0);
 
 }
 
@@ -294,7 +300,6 @@ void update_spi_header(uint32_t count)
 	spi_buffer_header[1] = 1; // padding
 	spi_buffer_header[2] = 2; // padding
 	spi_buffer_header[3]  = chksum; //
-	uint32_t count = ;
 	spi_buffer_header[4]  = (uint8_t)(count >> 0);
 	spi_buffer_header[5]  = (uint8_t)(count >> 8);
 	spi_buffer_header[6]  = (uint8_t)(count >> 16);

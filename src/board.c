@@ -121,3 +121,42 @@ void board_init(void)
 //	ioport_set_pin_level(SD_CARD_RD_PIN, 0);
 
 }
+
+//
+// Set System clock defined as: MCLK = XTAL * MUL / DIV / SYSCLK_PRES
+// XTAL = 10 MHz
+// Use master clock prescaler to 2 (SYSCLK_PRES_2)
+// - System clock 120 Mhz = 10Mhz * 24 / 1 / 2
+// - System clock 100 Mhz = 10Mhz * 20 / 1 / 2
+// - System clock 80 Mhz = 10Mhz * 16 / 1 / 2
+// - System clock 60 Mhz = 10Mhz * 12 / 1 / 2
+//
+static void setup_system_clocks(uint32_t sclk)
+{
+	uint32_t xtal = BOARD_FREQ_MAINCK_XTAL;
+	uint32_t div = 1;
+	uint32_t mul = sclk * 2 * div / xtal;
+	
+	/* Set flash wait state to max in case the below clock switching. */
+	system_init_flash(CHIP_FREQ_CPU_MAX);
+
+	// CONFIG_SYSCLK_SOURCE == SYSCLK_SRC_PLLACK
+	struct pll_config pllcfg;
+	pll_enable_source(PLL_SRC_MAINCK_XTAL);
+	pll_config_init(&pllcfg, PLL_SRC_MAINCK_XTAL, div, mul);
+	pll_enable(&pllcfg, 0);
+	pll_wait_for_lock(0);
+	pmc_switch_mck_to_pllack(SYSCLK_PRES_2); // prescaler 2
+	
+	printf("Clock configuration: sclk = %lu, mul = %lu, div=%lu,\n\r", sclk, mul, div);
+	
+	/* Update the SystemFrequency variable */
+	SystemCoreClockUpdate();
+
+	/* Set a flash wait state depending on the new cpu frequency */
+	system_init_flash(sysclk_get_cpu_hz());
+
+	// Turns off the USB clock, does not switch off the PLL.
+	//pmc_disable_udpck();
+
+}

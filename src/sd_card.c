@@ -49,7 +49,7 @@ int sd_card_init(sd_card_info_t *sd_card)
 		sd_card->version = sd_mmc_get_version(0);
 		sd_card->capacity = sd_mmc_get_capacity(0);  // capacity in KBytes
 		sd_card->block_size = SD_MMC_BLOCK_SIZE;
-		sd_card->first_block = 16;
+		sd_card->first_block = SD_CARD_START_BLOCK;
 		sd_card->last_block = sd_mmc_get_capacity(0) * (1024 / SD_MMC_BLOCK_SIZE);
 		if(Verbose) printf("SD Card Initialized\r\n");
 	} else {
