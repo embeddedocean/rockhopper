@@ -79,14 +79,14 @@
 //#define CONFIG_SYSCLK_PRES          SYSCLK_PRES_2
 
 // - System clock: (XTAL=10) * 24 / 1 / (SYSCLK_PRES=2) = 120MHz
-//#define CONFIG_PLL0_MUL             24
-//#define CONFIG_PLL0_DIV             1
-//#define CONFIG_SYSCLK_PRES          SYSCLK_PRES_2
-
-// - System clock: (XTAL=10) * 12 / 1 / (SYSCLK_PRES=2) = 60MHz
-#define CONFIG_PLL0_MUL             12
+#define CONFIG_PLL0_MUL             24
 #define CONFIG_PLL0_DIV             1
 #define CONFIG_SYSCLK_PRES          SYSCLK_PRES_2
+
+// - System clock: (XTAL=10) * 12 / 1 / (SYSCLK_PRES=2) = 60MHz
+//#define CONFIG_PLL0_MUL             12
+//#define CONFIG_PLL0_DIV             1
+//#define CONFIG_SYSCLK_PRES          SYSCLK_PRES_2
 
 // - System clock: (XTAL=10) * 24 / 2 / (SYSCLK_PRES=1) = 120MHz
 //#define CONFIG_PLL0_MUL             24
@@ -96,15 +96,15 @@
 
 // ===== PLL1 (B) Options   (Fpll = (Fclk * PLL_mul) / PLL_div)
 // Use mul and div effective values here.
-#define CONFIG_PLL1_SOURCE          PLL_SRC_MAINCK_XTAL
-#define CONFIG_PLL1_MUL             16
-#define CONFIG_PLL1_DIV             4
+//#define CONFIG_PLL1_SOURCE          PLL_SRC_MAINCK_XTAL
+//#define CONFIG_PLL1_MUL             16
+//#define CONFIG_PLL1_DIV             4
 
 // ===== USB Clock Source Options   (Fusb = FpllX / USB_div)
 // Use div effective value here.
 //#define CONFIG_USBCLK_SOURCE        USBCLK_SRC_PLL0
-#define CONFIG_USBCLK_SOURCE        USBCLK_SRC_PLL1
-#define CONFIG_USBCLK_DIV           2
+//#define CONFIG_USBCLK_SOURCE        USBCLK_SRC_PLL1
+//#define CONFIG_USBCLK_DIV           2
 
 // ===== Target frequency (System clock)
 // - XTAL frequency: 12MHz

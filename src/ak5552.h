@@ -45,12 +45,12 @@ typedef struct {
 extern int ak5552_init(uint32_t *fs);
 extern void ak5552_start_conversion(void);
 extern void ak5552_stop_conversion(void);
-extern uint16_t ak5552_read_dma(uint8_t *hdr, uint8_t *data, uint8_t flags);
+extern uint16_t ak5552_read_dma(uint8_t *hdr, uint8_t *data);
 extern uint8_t *ak5552_get_dma_buffer(void);
 extern uint16_t ak5552_init_dma(void);
 extern void ak5552_start_dma(void);
 extern void ak5552_stop_dma(void);
-extern void ak5552_update_header(uint8_t *hdr, uint8_t flags, uint8_t chksum);
+extern void ak5552_update_header(uint8_t *hdr, uint8_t chksum);
 
 extern void ak5552_get_date(uint8_t *year, uint8_t *month, uint8_t *day, uint8_t *week);
 extern void ak5552_get_time(uint8_t *hour, uint8_t *minute, uint8_t *second, uint32_t *usec);

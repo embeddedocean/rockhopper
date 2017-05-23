@@ -267,7 +267,7 @@ static uint8_t checksum(uint8_t *data, uint32_t len)
 	return(sum);
 }
 
-void ak5552_update_header(uint8_t *hdr, uint8_t flags, uint8_t chksum)
+void ak5552_update_header(uint8_t *hdr, uint8_t chksum)
 {
 	// update the data header info
 	uint8_t year,month,day,hour,minute,sec;
@@ -276,7 +276,7 @@ void ak5552_update_header(uint8_t *hdr, uint8_t flags, uint8_t chksum)
 	ak5552_get_date(&year, &month, &day, NULL);
 
 	hdr[0]  = 0xaa; // padding
-	hdr[1]  = flags;
+	hdr[1]  = 0xaa;
 	hdr[2]  = (uint8_t)(ak5552_settings);
 	hdr[3]  = (uint8_t)(AK5552_BUFFER_NBLOCKS);
 	hdr[4]  = (uint8_t)(AK5552_BYTES_PER_SAMPLE);
@@ -321,7 +321,7 @@ uint8_t *ak5552_get_dma_buffer(void)
 // flags are anything extra that you want to put in the header.
 // be careful with timing here because the dma buffer gets overwritten.
 //
-uint16_t ak5552_read_dma(uint8_t *hdr, uint8_t *data, uint8_t flags)
+uint16_t ak5552_read_dma(uint8_t *hdr, uint8_t *data)
 {
 	// no buffer ready or buffer has already been read
 	if(ssc_adc_buffer == NULL) return(0);
@@ -344,7 +344,7 @@ uint16_t ak5552_read_dma(uint8_t *hdr, uint8_t *data, uint8_t flags)
 	ssc_adc_buffer = NULL;
 	
 	// update the data header info
-	ak5552_update_header(hdr, flags, chksum);
+	ak5552_update_header(hdr, chksum);
 	
 	// return the buffer pointer
 	return(AK5552_NUM_SAMPLES);

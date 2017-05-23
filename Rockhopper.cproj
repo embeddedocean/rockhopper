@@ -746,7 +746,7 @@
     <None Include="src\config\conf_sleepmgr.h">
       <SubType>compile</SubType>
     </None>
-    <Compile Include="src\main_test6.c">
+    <Compile Include="src\main1.c">
       <SubType>compile</SubType>
     </Compile>
     <Compile Include="src\spi_pdc.c">
