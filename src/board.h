@@ -101,9 +101,15 @@ extern void board_init(void);
 //! Number of on-board buttons
 #define BUTTON_COUNT              0
 
-// USART CONSOLE
+// USARTS
 #define CONSOLE_UART              UART0
 #define CONSOLE_UART_ID           ID_UART0
+#define CONSOLE_UART_BAUDRATE     9600
+
+#define COM_UART              UART1
+#define COM_UART_ID           ID_UART1
+#define COM_UART_BAUDRATE     9600
+#define COM_USART_IRQn        USART1_IRQn
 
 /** UART1 pins (UTXD1 and URXD1) definitions, PB2,PB3. */
 #define PINS_UART1                (PIO_PB2A_URXD1 | PIO_PB3A_UTXD1)

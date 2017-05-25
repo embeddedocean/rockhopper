@@ -546,7 +546,8 @@
     </ListValues>
   </armgcc.linker.libraries.LibrarySearchPaths>
   <armgcc.linker.optimization.GarbageCollectUnusedSections>True</armgcc.linker.optimization.GarbageCollectUnusedSections>
-  <armgcc.linker.miscellaneous.LinkerFlags>-Wl,--entry=Reset_Handler -Wl,--cref -mthumb -T../src/ASF/sam/utils/linker_scripts/sam4s/sam4sd32/gcc/flash.ld</armgcc.linker.miscellaneous.LinkerFlags>
+  <armgcc.linker.memorysettings.ExternalRAM />
+  <armgcc.linker.miscellaneous.LinkerFlags>-u printf_float -Wl,--entry=Reset_Handler -Wl,--cref -mthumb -T../src/ASF/sam/utils/linker_scripts/sam4s/sam4sd32/gcc/flash.ld</armgcc.linker.miscellaneous.LinkerFlags>
   <armgcc.assembler.general.IncludePaths>
     <ListValues>
       <Value>../common/applications/xplained_pro_user_application/sam4sd32c_sam4s_xplained_pro/config</Value>
@@ -746,6 +747,15 @@
     <None Include="src\config\conf_sleepmgr.h">
       <SubType>compile</SubType>
     </None>
+    <Compile Include="src\console.c">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="src\com.c">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="src\console.h">
+      <SubType>compile</SubType>
+    </Compile>
     <Compile Include="src\main1.c">
       <SubType>compile</SubType>
     </Compile>

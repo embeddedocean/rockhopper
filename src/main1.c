@@ -4,10 +4,12 @@
  */
 #include <asf.h>
 #include <string.h>
+#include <stdio.h>
 
 #include "sd_card.h"
 #include "spi_pdc.h"
 #include "ak5552.h"
+#include "console.h"
 
 //void time_tick_init(void);
 //uint32_t time_tick_get(void);
@@ -30,39 +32,17 @@ uint8_t *spi_buffer_data = &spi_buffer[SPI_HEADER_NBYTES];
 
 uint8_t Verbose = 1;
 
-//uint32_t adc_fs = 300000;
-uint32_t adc_fs = 150000;
+//uint32_t sampling_rate = 300000;
+uint32_t sampling_rate = 150000;
+uint32_t upload_interval_in_minutes = 60;
+
 uint32_t number_buffers_per_upload = 512;
 
+int read_console_input(void);
 int read_data(void);
 int upload_data(void);
 void update_spi_header(uint32_t count);
 void setup_rtc(void);
-
-static inline uint8_t checksum(uint8_t *data, uint32_t len)
-{
-	uint32_t nbytes = len;
-	uint8_t *buf = data;
-	uint8_t sum = 0;
-	while(nbytes--) sum += *buf++;
-	return(sum);
-}
-
-/**
- *  Configure UART console.
- */
-static void setup_console(void)
-{
-	const usart_serial_options_t uart_serial_options = {
-		.baudrate = CONF_UART_BAUDRATE,
-		.paritytype = CONF_UART_PARITY
-	};
-
-	/* Configure console UART. */
-	sysclk_enable_peripheral_clock(CONSOLE_UART_ID);
-	pio_configure_pin_group(CONF_UART_PIO, CONF_PINS_UART, CONF_PINS_UART_FLAGS);
-	stdio_serial_init(CONF_UART, &uart_serial_options);
-}
 
 sd_card_info_t sd_card;
 uint32_t sd_write_addr = SD_CARD_START_BLOCK;
@@ -78,7 +58,6 @@ uint8_t upload_to_pi = 0;
 
 #define READING 0x01
 #define UPLOADING 0x02
-
 #define POWER_OFF 0x10
 #define READY 0x20
 #define BOOTING 0x40
@@ -108,7 +87,15 @@ int main (void)
 	/* Output header string  */
     fprintf(stdout, "-- RockHopper V1.0 --\r\n" );
 	fprintf(stdout, "-- Compiled: "__DATE__ " "__TIME__ " --\r\n");
-	
+
+	// read configuration 
+    fprintf(stdout, "\r\nEnter new configuration values or hit Enter to accept default values\r\n" );
+	int timeout = 4;
+    fprintf(stdout, "Prompt will timeout in %d seconds.\r\n", timeout );
+	sampling_rate = (uint32_t)console_prompt_int("Enter sampling rate in Hz", sampling_rate, timeout);
+	upload_interval_in_minutes = (uint32_t)console_prompt_int("Enter upload interval in minutes", upload_interval_in_minutes, timeout);
+    fprintf(stdout, "\r\n" );
+
 	setup_rtc();
 	
 	/* Initialize SD MMC stack */
@@ -122,12 +109,14 @@ int main (void)
 	}
 
 	// initialize adc	
-	ak5552_init(&adc_fs);
-	printf("ADC Initialized: fs = %lu\n\r", adc_fs);
+	ak5552_init(&sampling_rate);
+	printf("ADC Initialized: fs = %lu\n\r", sampling_rate);
 
 	printf("Init SSC DMA\n\r");
 	uint16_t nsamps = ak5552_init_dma();
 
+	float buffer_duration =  (float)AK5552_NUM_SAMPLES / (float)sampling_rate;
+	number_buffers_per_upload = (uint32_t)(60.0f * (float)upload_interval_in_minutes / buffer_duration);
 	nblocks_per_upload = number_buffers_per_upload * AK5552_BUFFER_NBLOCKS;
 	sd_end_addr = sd_card.last_block;
 	sd_start_addr = sd_card.first_block;
@@ -137,8 +126,13 @@ int main (void)
 		printf("sd end_addr %lu \n\r", sd_end_addr);
 		printf("nblocks_per_spi_buffer %lu \n\r", SPI_DATA_NBLOCKS);
 		printf("nblocks_per_adc_buffer %lu \n\r", AK5552_BUFFER_NBLOCKS);
-		printf("nblocks_per_upload %lu \n\r", nblocks_per_upload);	
-	} 
+		printf("nblocks_per_upload %lu \n\r", nblocks_per_upload);
+	}
+
+	//printf("buffer_duration %f \n\r", buffer_duration);
+	printf("sampling_rate %lu \n\r", sampling_rate);
+	printf("upload_interval_in_minutes %lu \n\r", upload_interval_in_minutes);
+	printf("number_buffers_per_upload %lu \n\r", number_buffers_per_upload);
 
 	ioport_set_pin_level(PIN_ENABLE_ADC, 1);
 	ioport_set_pin_level(PIN_ENABLE_TVDD, 1);
@@ -169,9 +163,9 @@ int main (void)
 		
 		if( upload_data() == 0 ) {
 			// sleep between dma buffers, the next dma interrupt will wake from sleep
-			//pmc_sleep(SAM_PM_SMODE_SLEEP_WFI);
+			pmc_sleep(SAM_PM_SMODE_SLEEP_WFI);
 		}
-		
+				
 	}
 
 }
@@ -291,6 +285,16 @@ int upload_data(void)
 
 }
 
+
+static inline uint8_t checksum(uint8_t *data, uint32_t len)
+{
+	uint32_t nbytes = len;
+	uint8_t *buf = data;
+	uint8_t sum = 0;
+	while(nbytes--) sum += *buf++;
+	return(sum);
+}
+
 void update_spi_header(uint32_t count)
 {
 	
@@ -316,6 +320,9 @@ void update_spi_header(uint32_t count)
 	//	printf("\n");
 	//}
 }
+
+
+
 
 /**
  * Calculate week from year, month, day.

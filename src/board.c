@@ -64,6 +64,10 @@ void board_init(void)
 	ioport_set_pin_level(LED_PIN, LED_OFF);
 	ioport_set_pin_dir(LED_PIN, IOPORT_DIR_OUTPUT);
 
+	/* Configure USART pinS */
+	pio_configure_pin_group(PINS_UART0_PIO, PINS_UART0, PINS_UART0_FLAGS);
+	pio_configure_pin_group(PINS_UART1_PIO, PINS_UART1, PINS_UART1_FLAGS);
+
 	/* Configure SSC pins */
 	gpio_configure_pin(PIN_SSC_RD, PIN_SSC_RD_FLAGS);
 	gpio_configure_pin(PIN_SSC_RF, PIN_SSC_RF_FLAGS);

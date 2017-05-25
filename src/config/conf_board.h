@@ -55,5 +55,11 @@
 /** SPI slave select MACRO definition */
 #define CONF_BOARD_SPI_NPCS0
 
+/** Enable Com Port. */
+#define CONF_BOARD_UART_CONSOLE
+
+/* USART1 module is used in serial mode. */
+#define CONF_BOARD_USART_RXD
+#define CONF_BOARD_USART_TXD
 
 #endif /* CONF_BOARD_H */
