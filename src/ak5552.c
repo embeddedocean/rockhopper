@@ -157,18 +157,22 @@ void ak5552_get_time(uint8_t *hour, uint8_t *minute, uint8_t *second, uint32_t *
 	*usec = 0;
 }
 
-void ak5552_get_date(uint8_t *year, uint8_t *month, uint8_t *day, uint8_t *week)
+void ak5552_get_date(uint8_t *cent, uint8_t *year, uint8_t *month, uint8_t *day, uint8_t *week)
 {
 	uint32_t date = ssc_adc_date;
-	uint32_t cent;
 	uint32_t temp;
 
-	/* Retrieve year */
+	/* Retrieve century */
 	if (year) {
 		temp = (date & RTC_CALR_CENT_Msk) >> RTC_CALR_CENT_Pos;
-		cent = (temp >> BCD_SHIFT) * BCD_FACTOR + (temp & BCD_MASK);
+		*cent = (uint8_t)((temp >> BCD_SHIFT) * BCD_FACTOR + (temp & BCD_MASK));
+	}
+
+	/* Retrieve year 0 - 99 */
+	if (year) {
 		temp = (date & RTC_CALR_YEAR_Msk) >> RTC_CALR_YEAR_Pos;
-		*year = (uint8_t)((cent * BCD_FACTOR * BCD_FACTOR) + (temp >> BCD_SHIFT) * BCD_FACTOR + (temp & BCD_MASK));
+		//*year = (uint16_t)((cent * BCD_FACTOR * BCD_FACTOR) + (temp >> BCD_SHIFT) * BCD_FACTOR + (temp & BCD_MASK));
+		*year = (uint8_t)((temp >> BCD_SHIFT) * BCD_FACTOR + (temp & BCD_MASK));
 	}
 
 	/* Retrieve month */
@@ -270,10 +274,10 @@ static uint8_t checksum(uint8_t *data, uint32_t len)
 void ak5552_update_header(uint8_t *hdr, uint8_t chksum)
 {
 	// update the data header info
-	uint8_t year,month,day,hour,minute,sec;
+	uint8_t year, month,day,hour,minute,sec;
 	uint32_t usec = 0;
 	ak5552_get_time(&hour, &minute, &sec, &usec);
-	ak5552_get_date(&year, &month, &day, NULL);
+	ak5552_get_date(NULL, &year, &month, &day, NULL);
 
 	hdr[0]  = 0xaa; // padding
 	hdr[1]  = 0xaa;
@@ -286,7 +290,7 @@ void ak5552_update_header(uint8_t *hdr, uint8_t chksum)
 	hdr[8]  = (uint8_t)(ssc_adc_sampling_freq >> 8);
 	hdr[9]  = (uint8_t)(ssc_adc_sampling_freq >> 16);
 	hdr[10] = (uint8_t)(ssc_adc_sampling_freq >> 24);
-	hdr[11] = (uint8_t)(year - 2000);
+	hdr[11] = (uint8_t)(year);
 	hdr[12] = (uint8_t)(month);
 	hdr[13] = (uint8_t)(day);
 	hdr[14] = (uint8_t)(hour);

@@ -12,7 +12,7 @@
 void setup_console(void);
 int console_gets(char *str);
 int read_console_input(void);
-int console_prompt_int(char *str, int value, int timeout);
+int console_prompt_int(const char *str, int value, int timeout);
 
 
 

@@ -6,15 +6,14 @@
 #include <string.h>
 #include <stdio.h>
 
+#include "board.h"
 #include "sd_card.h"
 #include "spi_pdc.h"
 #include "ak5552.h"
 #include "console.h"
-
-//void time_tick_init(void);
-//uint32_t time_tick_get(void);
-//uint32_t time_tick_calc_delay(uint32_t tick_start, uint32_t tick_end);
-
+#include "rtc_time.h"
+#include "uart_queue.h"
+#include "gps.h"
 
 COMPILER_WORD_ALIGNED uint8_t adc_buffer[AK5552_BUFFER_NBYTES];
 uint8_t *adc_buffer_header = adc_buffer;  // header is at start of buffer
@@ -38,11 +37,9 @@ uint32_t upload_interval_in_minutes = 60;
 
 uint32_t number_buffers_per_upload = 512;
 
-int read_console_input(void);
 int read_data(void);
 int upload_data(void);
 void update_spi_header(uint32_t count);
-void setup_rtc(void);
 
 sd_card_info_t sd_card;
 uint32_t sd_write_addr = SD_CARD_START_BLOCK;
@@ -66,37 +63,78 @@ uint8_t upload_to_pi = 0;
 uint8_t sys_state = READING;
 uint8_t pi_state = POWER_OFF;
 
+#define GPS_PORT 1
+#define GPS_UART_BAUDRATE 38400
+
 int main (void)
 {
 	int result = 0;
 
 	uint32_t main_clk = 120000000;
-	//setup_system_clocks(main_clk);
-	sysclk_init();
-	
+	sysclk_init();	
 	board_init();
-	
-	//pmc_disable_periph_clk(uint32_t ul_id);
-	//pmc_disable_udpck(void);
-
-	ioport_set_pin_level(LED_PIN, LED_ON);
 
 	/* Initialize the console uart */
 	setup_console();
+//	uart_configure(CONSOLE_UART, CONSOLE_UART_BAUDRATE, 1);
+//	uart_set_termination(CONSOLE_UART, USART_CARRIAGE_RETURN_TERMINATION);  // * termination
+//	uart_set_echo(CONSOLE_UART, 1);  // * echo input
+//	uart_start_queue(CONSOLE_UART);
 
 	/* Output header string  */
     fprintf(stdout, "-- RockHopper V1.0 --\r\n" );
 	fprintf(stdout, "-- Compiled: "__DATE__ " "__TIME__ " --\r\n");
 
-	// read configuration 
-    fprintf(stdout, "\r\nEnter new configuration values or hit Enter to accept default values\r\n" );
-	int timeout = 4;
-    fprintf(stdout, "Prompt will timeout in %d seconds.\r\n", timeout );
-	sampling_rate = (uint32_t)console_prompt_int("Enter sampling rate in Hz", sampling_rate, timeout);
-	upload_interval_in_minutes = (uint32_t)console_prompt_int("Enter upload interval in minutes", upload_interval_in_minutes, timeout);
-    fprintf(stdout, "\r\n" );
+	// configuration prompt
+	int timeout = 6;
+	fprintf(stdout, "\r\nEnter configuration or hit Enter to accept default values\r\n" );
+	fprintf(stdout, "Prompt will timeout in %d seconds.\r\n", timeout );
 
-	setup_rtc();
+	// read sampling rate
+	sampling_rate = (uint32_t)console_prompt_int("Enter sampling rate in Hz", sampling_rate, timeout);
+
+	// read upload interval
+	upload_interval_in_minutes = (uint32_t)console_prompt_int("Enter upload interval in minutes", upload_interval_in_minutes, timeout);
+
+	// read and set date and time
+	fprintf(stdout, "\r\nLooking for GPS Time on UART1\r\n" );
+	rtc_time_t rtc = {.century=20, .year=17, .month=5, .day=26, .hour=1, .minute=0, .second=0};
+	ioport_set_pin_level(LED_PIN, LED_ON);
+	uart_configure_queue(GPS_PORT, GPS_UART_BAUDRATE);
+	uart_set_termination(GPS_PORT, USART_NEWLINE_TERMINATION);  // * termination
+	uart_start_queue(GPS_PORT);
+	int gps_timeout = 10000;
+	while( timeout ) {
+		ioport_toggle_pin_level(LED_PIN);
+		uint8_t str[128];
+		enum status_code status = uart_read_message_queue(GPS_PORT, str, 128);
+		if( status == STATUS_OK && gps_parse_zda(str, &rtc)) {
+			fprintf(stdout, "Found GPS message: %s\r\n", str);
+			break;
+		} else {
+			gps_timeout--;
+			delay_ms(1);
+		}
+	}
+	uart_stop_queue(GPS_PORT);
+	
+	// if not GPS message is found 
+	if( gps_timeout == 0) {
+		fprintf(stdout, "No GPS Time found.\r\n" );
+		fprintf(stdout, "Enter time manually using epoch (or Linux) time.\r\n" );
+		uint32_t epoch = rtc_time_to_epoch(&rtc);
+		epoch = (uint32_t)console_prompt_int("Enter epoch time", epoch, timeout);
+		epoch_to_rtc_time(&rtc, epoch);
+		fprintf(stdout, "\r\n");	
+	}
+
+	// set the system RTC
+	setup_rtc(&rtc);
+
+//	main_clk = (uint32_t)console_prompt_int("Enter main_clk", main_clk, timeout);
+//	resetup_system_clocks(main_clk);
+//	board_init();
+//	setup_console();
 	
 	/* Initialize SD MMC stack */
 	if(sd_card_init(&sd_card) != SD_MMC_OK) {
@@ -131,8 +169,7 @@ int main (void)
 
 	//printf("buffer_duration %f \n\r", buffer_duration);
 	printf("sampling_rate %lu \n\r", sampling_rate);
-	printf("upload_interval_in_minutes %lu \n\r", upload_interval_in_minutes);
-	printf("number_buffers_per_upload %lu \n\r", number_buffers_per_upload);
+ 	printf("number_buffers_per_upload %lu \n\r", number_buffers_per_upload);
 
 	ioport_set_pin_level(PIN_ENABLE_ADC, 1);
 	ioport_set_pin_level(PIN_ENABLE_TVDD, 1);
@@ -159,6 +196,13 @@ int main (void)
 
 	while (go) {
 
+//		ioport_toggle_pin_level(LED_PIN);
+//		delay_ms(100);
+//		int result = sd_card_write_raw(&sd_card, adc_buffer, AK5552_BUFFER_NBLOCKS, sd_write_addr);
+//		if( result != SD_MMC_OK ) {
+//			printf("sd_card_write_raw: 0x%x.\n\r", result);
+//		}
+		
 		read_data();
 		
 		if( upload_data() == 0 ) {
@@ -323,44 +367,3 @@ void update_spi_header(uint32_t count)
 
 
 
-
-/**
- * Calculate week from year, month, day.
- */
-static uint32_t calculate_week(uint32_t ul_year, uint32_t ul_month, uint32_t ul_day)
-{
-	uint32_t ul_week;
-
-	if (ul_month == 1 || ul_month == 2) {
-		ul_month += 12;
-		--ul_year;
-	}
-
-	ul_week = (ul_day + 2 * ul_month + 3 * (ul_month + 1) / 5 + ul_year +
-			ul_year / 4 - ul_year / 100 + ul_year / 400) % 7;
-
-	++ul_week;
-
-	return ul_week;
-}
-
-void setup_rtc(void)
-{
-	uint32_t year = 2017;
-	uint32_t month = 4;
-	uint32_t day = 28;
-	uint32_t week = calculate_week(year, month, day);
-	uint32_t hour = 0;
-	uint32_t minute = 0;
-	uint32_t sec = 0;
-	uint32_t usec = 0;
-	
-	rtc_set_hour_mode(RTC, 0);
-	rtc_set_time(RTC, hour, minute, sec);
-	rtc_set_date(RTC, year, month, day, week);
-
-	rtc_get_time(RTC, &hour, &minute, &sec);
-	rtc_get_date(RTC, &year, &month, &day, &week);
-	
-	printf("RTC set to %02d/%02d/%02d %02d:%02d:%02d\r\n", year, month, day, hour, minute, sec);
-}

@@ -5,8 +5,6 @@ VisualStudioVersion = 14.0.23107.0
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{54F91283-7BC4-4236-8FF9-10F437C3AD48}") = "Rockhopper", "Rockhopper.cproj", "{DCE6C7E3-EE26-4D79-826B-08594B9AD897}"
 EndProject
-Project("{54F91283-7BC4-4236-8FF9-10F437C3AD48}") = "USART_USART_SERIAL_EXAMPLE1", "..\..\..\Atmel Studio\7.0\USART_USART_SERIAL_EXAMPLE1\USART_USART_SERIAL_EXAMPLE1.cproj", "{1401E239-7B1D-44D1-AEAC-FFF2A8A1F2F4}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|ARM = Debug|ARM
@@ -17,10 +15,6 @@ Global
 		{DCE6C7E3-EE26-4D79-826B-08594B9AD897}.Debug|ARM.Build.0 = Debug|ARM
 		{DCE6C7E3-EE26-4D79-826B-08594B9AD897}.Release|ARM.ActiveCfg = Release|ARM
 		{DCE6C7E3-EE26-4D79-826B-08594B9AD897}.Release|ARM.Build.0 = Release|ARM
-		{1401E239-7B1D-44D1-AEAC-FFF2A8A1F2F4}.Debug|ARM.ActiveCfg = Debug|ARM
-		{1401E239-7B1D-44D1-AEAC-FFF2A8A1F2F4}.Debug|ARM.Build.0 = Debug|ARM
-		{1401E239-7B1D-44D1-AEAC-FFF2A8A1F2F4}.Release|ARM.ActiveCfg = Release|ARM
-		{1401E239-7B1D-44D1-AEAC-FFF2A8A1F2F4}.Release|ARM.Build.0 = Release|ARM
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

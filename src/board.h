@@ -5,10 +5,12 @@
 #ifndef _SAM4S_BOARD_H
 #define _SAM4S_BOARD_H
 
-
 #include <conf_board.h>
+#include <stdint.h>
+#include <sam4sd32b.h>
 
 extern void board_init(void);
+extern void resetup_system_clocks(uint32_t sclk);
 
 /**
  * \def CONF_BOARD_KEEP_WATCHDOG_AT_INIT
@@ -101,25 +103,28 @@ extern void board_init(void);
 //! Number of on-board buttons
 #define BUTTON_COUNT              0
 
-// USARTS
+/** UART0 pins (UTXD0 and URXD0) definitions, PA9,10. */
+#define PINS_UART0         (PIO_PA9A_URXD0 | PIO_PA10A_UTXD0)
+#define PINS_UART0_FLAGS   (PIO_PERIPH_A | PIO_DEFAULT)
+#define PINS_UART0_MASK    PIO_PA9A_URXD0|PIO_PA10A_UTXD0
+#define PINS_UART0_PIO     PIOA
+#define PINS_UART0_ID      ID_PIOA
+#define PINS_UART0_TYPE    PIO_PERIPH_A
+#define PINS_UART0_ATTR    PIO_DEFAULT
+
+/** UART1 pins (UTXD1 and URXD1) definitions, PB2,PB3. */
+#define PINS_UART1         (PIO_PB2A_URXD1 | PIO_PB3A_UTXD1)
+#define PINS_UART1_FLAGS   (PIO_PERIPH_A | PIO_DEFAULT)
+#define PINS_UART1_MASK    PIO_PB2A_URXD1 | PIO_PB3A_UTXD1
+#define PINS_UART1_PIO     PIOB
+#define PINS_UART1_ID      ID_PIOB
+#define PINS_UART1_TYPE    PIO_PERIPH_A
+#define PINS_UART1_ATTR    PIO_DEFAULT
+
+// UARTS
 #define CONSOLE_UART              UART0
 #define CONSOLE_UART_ID           ID_UART0
 #define CONSOLE_UART_BAUDRATE     9600
-
-#define COM_UART              UART1
-#define COM_UART_ID           ID_UART1
-#define COM_UART_BAUDRATE     9600
-#define COM_USART_IRQn        USART1_IRQn
-
-/** UART1 pins (UTXD1 and URXD1) definitions, PB2,PB3. */
-#define PINS_UART1                (PIO_PB2A_URXD1 | PIO_PB3A_UTXD1)
-#define PINS_UART1_FLAGS          (PIO_PERIPH_A | PIO_DEFAULT)
-#define PINS_UART1_PIO            PIOB
-
-/** UART0 pins (UTXD0 and URXD0) definitions, PA9,PA10. */
-#define PINS_UART0                (PIO_PA9A_URXD0 | PIO_PA10A_UTXD0)
-#define PINS_UART0_FLAGS          (PIO_PERIPH_A | PIO_DEFAULT)
-#define PINS_UART0_PIO            PIOA
 
 //! \name HSMCI pins definition
 /*! Number of slot connected on HSMCI interface */

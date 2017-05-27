@@ -52,7 +52,7 @@ extern void ak5552_start_dma(void);
 extern void ak5552_stop_dma(void);
 extern void ak5552_update_header(uint8_t *hdr, uint8_t chksum);
 
-extern void ak5552_get_date(uint8_t *year, uint8_t *month, uint8_t *day, uint8_t *week);
+extern void ak5552_get_date(uint8_t *cent, uint8_t *year, uint8_t *month, uint8_t *day, uint8_t *week);
 extern void ak5552_get_time(uint8_t *hour, uint8_t *minute, uint8_t *second, uint32_t *usec);
 
 #endif /* AK5552_H_ */

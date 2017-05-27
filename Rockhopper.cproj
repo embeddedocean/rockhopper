@@ -723,6 +723,30 @@
     <Compile Include="src\ASF\common\services\sleepmgr\sam\sleepmgr.c">
       <SubType>compile</SubType>
     </Compile>
+    <Compile Include="src\console.c">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="src\console.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="src\gps.c">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="src\gps.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="src\rtc_time.c">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="src\rtc_time.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="src\uart_queue.c">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="src\uart_queue.h">
+      <SubType>compile</SubType>
+    </Compile>
     <None Include="src\ASF\common\services\sleepmgr\sleepmgr.h">
       <SubType>compile</SubType>
     </None>
@@ -747,15 +771,6 @@
     <None Include="src\config\conf_sleepmgr.h">
       <SubType>compile</SubType>
     </None>
-    <Compile Include="src\console.c">
-      <SubType>compile</SubType>
-    </Compile>
-    <Compile Include="src\com.c">
-      <SubType>compile</SubType>
-    </Compile>
-    <Compile Include="src\console.h">
-      <SubType>compile</SubType>
-    </Compile>
     <Compile Include="src\main1.c">
       <SubType>compile</SubType>
     </Compile>

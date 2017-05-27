@@ -42,16 +42,25 @@
 /*
  * Support and FAQ: visit <a href="http://www.atmel.com/design-support/">Atmel Support</a>
  */
-
 #include <board.h>
 #include <gpio.h>
 #include <ioport.h>
 #include <wdt.h>
 
-
 void board_init(void)
 {
+	pmc_disable_all_periph_clk();
 
+	pmc_enable_periph_clk(ID_SSC);
+	pmc_enable_periph_clk(ID_PIOA);
+	pmc_enable_periph_clk(ID_PIOB);
+	pmc_enable_periph_clk(ID_UART0);
+	pmc_enable_periph_clk(ID_UART1);
+	pmc_enable_periph_clk(ID_SPI);
+
+	//pmc_disable_periph_clk(uint32_t ul_id);
+	//pmc_disable_udpck(void);
+	
 	wdt_disable(WDT);
 
 	/* GPIO has been deprecated, the old code just keeps it for compatibility.
@@ -65,8 +74,8 @@ void board_init(void)
 	ioport_set_pin_dir(LED_PIN, IOPORT_DIR_OUTPUT);
 
 	/* Configure USART pinS */
-	pio_configure_pin_group(PINS_UART0_PIO, PINS_UART0, PINS_UART0_FLAGS);
-	pio_configure_pin_group(PINS_UART1_PIO, PINS_UART1, PINS_UART1_FLAGS);
+	//pio_configure_pin_group(PINS_UART0_PIO, PINS_UART0, PINS_UART0_FLAGS);
+	//pio_configure_pin_group(PINS_UART1_PIO, PINS_UART1, PINS_UART1_FLAGS);
 
 	/* Configure SSC pins */
 	gpio_configure_pin(PIN_SSC_RD, PIN_SSC_RD_FLAGS);
@@ -135,7 +144,7 @@ void board_init(void)
 // - System clock 80 Mhz = 10Mhz * 16 / 1 / 2
 // - System clock 60 Mhz = 10Mhz * 12 / 1 / 2
 //
-static void setup_system_clocks(uint32_t sclk)
+void resetup_system_clocks(uint32_t sclk)
 {
 	uint32_t xtal = BOARD_FREQ_MAINCK_XTAL;
 	uint32_t div = 1;
@@ -146,13 +155,14 @@ static void setup_system_clocks(uint32_t sclk)
 
 	// CONFIG_SYSCLK_SOURCE == SYSCLK_SRC_PLLACK
 	struct pll_config pllcfg;
+	pll_disable(0);
 	pll_enable_source(PLL_SRC_MAINCK_XTAL);
 	pll_config_init(&pllcfg, PLL_SRC_MAINCK_XTAL, div, mul);
 	pll_enable(&pllcfg, 0);
 	pll_wait_for_lock(0);
 	pmc_switch_mck_to_pllack(SYSCLK_PRES_2); // prescaler 2
 	
-	printf("Clock configuration: sclk = %lu, mul = %lu, div=%lu,\n\r", sclk, mul, div);
+	//printf("Clock configuration: sclk = %lu, mul = %lu, div=%lu,\n\r", sclk, mul, div);
 	
 	/* Update the SystemFrequency variable */
 	SystemCoreClockUpdate();

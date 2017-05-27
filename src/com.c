@@ -104,7 +104,7 @@ void USART_Handler(void)
 }
 
 /**
- * \brief Configure USART in normal (serial rs232) mode, asynchronous,
+ * Configure USART in normal (serial rs232) mode, asynchronous,
  * 8 bits, 1 stop bit, no parity, 115200 bauds and enable its transmitter
  * and receiver.
  */
@@ -146,13 +146,12 @@ static void configure_usart(void)
 	com_packet.ul_size = COM_BUFFER_SIZE;
 	com_nextpacket.ul_addr = (uint32_t)com_nextbuffer[com_buf_num];
 	com_nextpacket.ul_size = COM_BUFFER_SIZE;
-	pdc_rx_init(com_pdc, &com_packet, &com_nextpacket);
+	pdc_rx_init(com_pdc, &com_packet, &com_nex tpacket);
 
 	com_trans_mode = COM_PDC_TRANSFER;
 
 	usart_disable_interrupt(COM_UART, US_IDR_RXRDY);
 	usart_enable_interrupt(COM_UART, US_IER_RXBUFF);
-	
 }
 
 /**
@@ -171,7 +170,7 @@ static void configure_console(void)
 }
 
 /**
- * \brief Reset the TX & RX, and clear the PDC counter.
+ * Reset the TX & RX, and clear the PDC counter.
  */
 static void usart_clear(void)
 {
@@ -192,7 +191,7 @@ static void usart_clear(void)
 }
 
 /**
- * \brief Display main menu.
+ * Display main menu.
  */
 static void display_main_menu(void)
 {
