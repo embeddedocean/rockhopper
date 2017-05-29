@@ -55,7 +55,13 @@ int ak5552_init(uint32_t *fs)
 	pmc_enable_periph_clk(ID_SSC);
 	ssc_reset(SSC);
 	
+	// Right channel is AIN2
+	//ssc_i2s_set_receiver(SSC, SSC_I2S_SLAVE_IN, SSC_RCMR_CKS_RK, SSC_AUDIO_MONO_RIGHT, AK5552_BITS_PER_SAMPLE);
+	
+	// Left channel is AIN1
 	ssc_i2s_set_receiver(SSC, SSC_I2S_SLAVE_IN, SSC_RCMR_CKS_RK, SSC_AUDIO_MONO_LEFT, AK5552_BITS_PER_SAMPLE);
+	//ssc_i2s_set_receiver(SSC, SSC_I2S_SLAVE_IN, SSC_RCMR_CKS_RK, SSC_AUDIO_MONO_LEFT, 32);
+
 	//ssc_i2s_set_receiver(SSC, SSC_I2S_SLAVE_IN, SSC_RCMR_CKS_RK, SSC_AUDIO_STERO, AK5552_SAMPLE_SIZE);
 	
 	//ssc_enable_tx(SSC);
@@ -92,8 +98,8 @@ int ak5552_init(uint32_t *fs)
 	  | TC_CMR_ACPC_TOGGLE	//toggle TIOA on RC match
 	);
 	
-	// desired mclk
-	uint32_t mclk = *fs * 32;
+	// desired mclk  using 32fs (hex speed) setting on CKS0-3 pins
+	uint32_t mclk = *fs * 32;  
 
 	/* Configure waveform frequency and duty cycle. */
 	sck = sysclk_get_peripheral_bus_hz(TC0);
@@ -301,7 +307,7 @@ void ak5552_update_header(uint8_t *hdr, uint8_t chksum)
 	hdr[19] = (uint8_t)(usec >> 16);
 	hdr[20] = (uint8_t)(usec >> 24);
 	hdr[21] = chksum;   // checksum for data
-	hdr[22] = checksum(&hdr[1], 21);  // checksum for header, not including the padding
+	hdr[22] = 0; //checksum(&hdr[1], 21);  // checksum for header, not including the padding
 	hdr[23] = 0xaa;  // padding	
 }
 
@@ -337,11 +343,13 @@ uint16_t ak5552_read_dma(uint8_t *hdr, uint8_t *data)
 	uint32_t nbytes = AK5552_NUM_SAMPLES * 4;
 	uint32_t m = 0;
 	for(uint32_t n = 0; n < nbytes; n += 4) {
-		*obuf++ = ibuf[n]; // = (uint8_t)m;
-		*obuf++ = ibuf[n+1]; // = (uint8_t)(m >> 8);
-		*obuf++ = ibuf[n+2]; // = (uint8_t)(m++ >> 16);
-		//obuf[m++] = ibuf[n+3];
-		chksum += ibuf[n] + ibuf[n+1] + ibuf[n+2];
+		//*obuf++ = ibuf[n]; // = (uint8_t)m;
+		//*obuf++ = ibuf[n+1]; // = (uint8_t)(m >> 8);
+		//*obuf++ = ibuf[n+2]; // = (uint8_t)(m++ >> 16);
+		obuf[m++] = ibuf[n];  // msb
+		obuf[m++] = ibuf[n+1];
+		obuf[m++] = ibuf[n+2];
+		//chksum += ibuf[n] + ibuf[n+1] + ibuf[n+2];
 	}
 
 	// indicate that the dma buffer has been read

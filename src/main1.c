@@ -31,8 +31,8 @@ uint8_t *spi_buffer_data = &spi_buffer[SPI_HEADER_NBYTES];
 
 uint8_t Verbose = 1;
 
-//uint32_t sampling_rate = 300000;
-uint32_t sampling_rate = 150000;
+uint32_t sampling_rate = 312500;
+//uint32_t sampling_rate = 156250;
 uint32_t upload_interval_in_minutes = 60;
 
 uint32_t number_buffers_per_upload = 512;
@@ -52,6 +52,8 @@ uint32_t nblocks_per_upload = 1024 * AK5552_BUFFER_NBLOCKS;
 uint32_t input_count = 0;
 uint32_t output_count = 0;
 uint8_t upload_to_pi = 0;
+
+uint8_t shutdown_pi_after_upload = 1;
 
 #define READING 0x01
 #define UPLOADING 0x02
@@ -76,17 +78,13 @@ int main (void)
 
 	/* Initialize the console uart */
 	setup_console();
-//	uart_configure(CONSOLE_UART, CONSOLE_UART_BAUDRATE, 1);
-//	uart_set_termination(CONSOLE_UART, USART_CARRIAGE_RETURN_TERMINATION);  // * termination
-//	uart_set_echo(CONSOLE_UART, 1);  // * echo input
-//	uart_start_queue(CONSOLE_UART);
 
 	/* Output header string  */
     fprintf(stdout, "-- RockHopper V1.0 --\r\n" );
 	fprintf(stdout, "-- Compiled: "__DATE__ " "__TIME__ " --\r\n");
 
 	// configuration prompt
-	int timeout = 6;
+	int timeout = 10;
 	fprintf(stdout, "\r\nEnter configuration or hit Enter to accept default values\r\n" );
 	fprintf(stdout, "Prompt will timeout in %d seconds.\r\n", timeout );
 
@@ -96,6 +94,9 @@ int main (void)
 	// read upload interval
 	upload_interval_in_minutes = (uint32_t)console_prompt_int("Enter upload interval in minutes", upload_interval_in_minutes, timeout);
 
+	// read upload interval
+	shutdown_pi_after_upload = (uint8_t)console_prompt_int("Shutdown PI after upload (1=yes, 0=no)", shutdown_pi_after_upload, timeout);
+
 	// read and set date and time
 	fprintf(stdout, "\r\nLooking for GPS Time on UART1\r\n" );
 	rtc_time_t rtc = {.century=20, .year=17, .month=5, .day=26, .hour=1, .minute=0, .second=0};
@@ -103,14 +104,18 @@ int main (void)
 	uart_configure_queue(GPS_PORT, GPS_UART_BAUDRATE);
 	uart_set_termination(GPS_PORT, USART_NEWLINE_TERMINATION);  // * termination
 	uart_start_queue(GPS_PORT);
-	int gps_timeout = 10000;
-	while( timeout ) {
+	int gps_timeout = 10000; // 10 seconds
+	while( gps_timeout ) {
 		ioport_toggle_pin_level(LED_PIN);
 		uint8_t str[128];
 		enum status_code status = uart_read_message_queue(GPS_PORT, str, 128);
+		// if a ZDA message is found, use it to set the time
 		if( status == STATUS_OK && gps_parse_zda(str, &rtc)) {
-			fprintf(stdout, "Found GPS message: %s\r\n", str);
-			break;
+			// sometimes a bad time is found, so keep looking
+			if(rtc.year > 06) {
+				fprintf(stdout, "Found GPS message: %s\r\n", str);
+				break;
+			}
 		} else {
 			gps_timeout--;
 			delay_ms(1);
@@ -130,11 +135,6 @@ int main (void)
 
 	// set the system RTC
 	setup_rtc(&rtc);
-
-//	main_clk = (uint32_t)console_prompt_int("Enter main_clk", main_clk, timeout);
-//	resetup_system_clocks(main_clk);
-//	board_init();
-//	setup_console();
 	
 	/* Initialize SD MMC stack */
 	if(sd_card_init(&sd_card) != SD_MMC_OK) {
@@ -171,7 +171,7 @@ int main (void)
 	printf("sampling_rate %lu \n\r", sampling_rate);
  	printf("number_buffers_per_upload %lu \n\r", number_buffers_per_upload);
 
-	ioport_set_pin_level(PIN_ENABLE_ADC, 1);
+	ioport_set_pin_level(PIN_ENABLE_ADC, 1); 
 	ioport_set_pin_level(PIN_ENABLE_TVDD, 1);
 //	ioport_set_pin_level(PIN_PREAMP_SHDN, 1);
 
@@ -195,13 +195,6 @@ int main (void)
 	pi_state = POWER_OFF;
 
 	while (go) {
-
-//		ioport_toggle_pin_level(LED_PIN);
-//		delay_ms(100);
-//		int result = sd_card_write_raw(&sd_card, adc_buffer, AK5552_BUFFER_NBLOCKS, sd_write_addr);
-//		if( result != SD_MMC_OK ) {
-//			printf("sd_card_write_raw: 0x%x.\n\r", result);
-//		}
 		
 		read_data();
 		
@@ -257,7 +250,7 @@ int upload_data(void)
 	if( pi_state == SHUTTING_DOWN ) {
 		if ( ioport_get_pin_level(PI_ON_PIN) == IOPORT_PIN_LEVEL_LOW ) {
 			printf("Shutting down PI.\r\n");
-			ioport_set_pin_level(PIN_ENABLE_5V_OUT, 0);
+			if(shutdown_pi_after_upload) ioport_set_pin_level(PIN_ENABLE_5V_OUT, 0);
 			pi_state = POWER_OFF;
 		}
 		return(0);
