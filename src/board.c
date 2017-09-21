@@ -56,7 +56,7 @@ void board_init(void)
 	pmc_enable_periph_clk(ID_PIOB);
 	pmc_enable_periph_clk(ID_UART0);
 	pmc_enable_periph_clk(ID_UART1);
-	pmc_enable_periph_clk(ID_SPI);
+	//pmc_enable_periph_clk(ID_SPI);
 
 	//pmc_disable_periph_clk(uint32_t ul_id);
 	//pmc_disable_udpck(void);
@@ -70,8 +70,12 @@ void board_init(void)
 	ioport_init();
 
 	/* Initialize LED0, turned off */
-	ioport_set_pin_level(LED_PIN, LED_OFF);
-	ioport_set_pin_dir(LED_PIN, IOPORT_DIR_OUTPUT);
+	ioport_set_pin_dir(LED1_PIN, IOPORT_DIR_OUTPUT);
+	ioport_set_pin_level(LED1_PIN, LED_OFF);
+	ioport_set_pin_dir(LED2_PIN, IOPORT_DIR_OUTPUT);
+	ioport_set_pin_level(LED2_PIN, LED_OFF);
+	ioport_set_pin_dir(LED3_PIN, IOPORT_DIR_OUTPUT);
+	ioport_set_pin_level(LED3_PIN, LED_OFF);
 
 	/* Configure USART pinS */
 	//pio_configure_pin_group(PINS_UART0_PIO, PINS_UART0, PINS_UART0_FLAGS);
@@ -97,9 +101,9 @@ void board_init(void)
 //	gpio_configure_pin(SD_MMC_0_CD_GPIO, SD_MMC_0_CD_FLAGS);
 	
 	/* Configure SPI pins */
-	gpio_configure_pin(SPI_MISO_GPIO, SPI_MISO_FLAGS);
-	gpio_configure_pin(SPI_MOSI_GPIO, SPI_MOSI_FLAGS);
-	gpio_configure_pin(SPI_SPCK_GPIO, SPI_SPCK_FLAGS);
+//	gpio_configure_pin(SPI_MISO_GPIO, SPI_MISO_FLAGS);
+//	gpio_configure_pin(SPI_MOSI_GPIO, SPI_MOSI_FLAGS);
+//	gpio_configure_pin(SPI_SPCK_GPIO, SPI_SPCK_FLAGS);
 
 	/**
 	 * For NPCS 1, 2, and 3, different PINs can be used to access the same NPCS line.
@@ -114,17 +118,26 @@ void board_init(void)
 	ioport_set_pin_mode(PI_ON_PIN, IOPORT_MODE_OPEN_DRAIN);
 	
 	// power enable pins
-	ioport_set_pin_dir(PIN_ENABLE_3V3_OUT, IOPORT_DIR_OUTPUT);
-	ioport_set_pin_level(PIN_ENABLE_3V3_OUT, 0);
+	ioport_set_pin_dir(PIN_ENABLE_PI_5V, IOPORT_DIR_OUTPUT);
+	ioport_set_pin_level(PIN_ENABLE_PI_5V, 0);
 
-	ioport_set_pin_dir(PIN_ENABLE_5V_OUT, IOPORT_DIR_OUTPUT);
-	ioport_set_pin_level(PIN_ENABLE_5V_OUT, 0);
+	ioport_set_pin_dir(PIN_ENABLE_EXT_5V, IOPORT_DIR_OUTPUT);
+	ioport_set_pin_level(PIN_ENABLE_EXT_5V, 0);
 
-	ioport_set_pin_dir(PIN_ENABLE_TVDD, IOPORT_DIR_OUTPUT);
-	ioport_set_pin_level(PIN_ENABLE_TVDD, 0);
+	ioport_set_pin_dir(PIN_ENABLE_ADC_PWR, IOPORT_DIR_OUTPUT);
+	ioport_set_pin_level(PIN_ENABLE_ADC_PWR, 0);
 
-	ioport_set_pin_dir(PIN_ENABLE_ADC, IOPORT_DIR_OUTPUT);
-	ioport_set_pin_level(PIN_ENABLE_ADC, 1);
+	ioport_set_pin_dir(PIN_RESET_ADC_PDN, IOPORT_DIR_OUTPUT);
+	ioport_set_pin_level(PIN_RESET_ADC_PDN, 0);
+
+	ioport_set_pin_dir(PIN_SELECT_SD, IOPORT_DIR_OUTPUT);
+	ioport_set_pin_level(PIN_SELECT_SD, SELECT_SD1);
+
+	ioport_set_pin_dir(PIN_ENABLE_SD1, IOPORT_DIR_OUTPUT);
+	ioport_set_pin_level(PIN_ENABLE_SD1, 0);
+
+	ioport_set_pin_dir(PIN_ENABLE_SD2, IOPORT_DIR_OUTPUT);
+	ioport_set_pin_level(PIN_ENABLE_SD2, 0);
 
 //	ioport_set_pin_dir(SSC_ADC_BUF_PIN, IOPORT_DIR_OUTPUT);
 //	ioport_set_pin_dir(SD_CARD_WR_PIN, IOPORT_DIR_OUTPUT);

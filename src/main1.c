@@ -19,16 +19,6 @@ COMPILER_WORD_ALIGNED uint8_t adc_buffer[AK5552_BUFFER_NBYTES];
 uint8_t *adc_buffer_header = adc_buffer;  // header is at start of buffer
 uint8_t *adc_buffer_data = &adc_buffer[AK5552_HEADER_NBYTES]; // data follows header
 
-#define SPI_DATA_NBLOCKS (6)
-#define SPI_DATA_NBYTES (SPI_DATA_NBLOCKS * SD_MMC_BLOCK_SIZE)
-
-#define SPI_HEADER_NBYTES 12
-#define SPI_BUFFER_NBYTES (SPI_HEADER_NBYTES + SPI_DATA_NBYTES)
-
-COMPILER_WORD_ALIGNED uint8_t spi_buffer[SPI_BUFFER_NBYTES];
-uint8_t *spi_buffer_header = spi_buffer;
-uint8_t *spi_buffer_data = &spi_buffer[SPI_HEADER_NBYTES];
-
 uint8_t Verbose = 1;
 
 uint32_t sampling_rate = 312500;
@@ -79,8 +69,16 @@ int main (void)
 	/* Initialize the console uart */
 	setup_console();
 
+	ioport_set_pin_level(LED2_PIN, LED_ON);
+
+	// select and enable SD1
+	ioport_set_pin_level(PIN_ENABLE_SD1, 0);
+	delay_ms(1000);
+	ioport_set_pin_level(PIN_SELECT_SD, SELECT_SD1);
+	delay_ms(1000);
+
 	/* Output header string  */
-    fprintf(stdout, "-- RockHopper V1.0 --\r\n" );
+    fprintf(stdout, "-- RockHopper V2.0 --\r\n" );
 	fprintf(stdout, "-- Compiled: "__DATE__ " "__TIME__ " --\r\n");
 
 	// configuration prompt
@@ -99,15 +97,15 @@ int main (void)
 
 	// GPS read and set date and time
 	rtc_time_t rtc = {.century=20, .year=17, .month=5, .day=26, .hour=1, .minute=0, .second=0};
-	ioport_set_pin_level(LED_PIN, LED_ON);
+	ioport_set_pin_level(LED1_PIN, LED_ON);
 	uart_configure_queue(GPS_PORT, GPS_UART_BAUDRATE);
 	uart_set_termination(GPS_PORT, USART_NEWLINE_TERMINATION);  // * termination
 	uart_start_queue(GPS_PORT);
 	int gps_timeout = 60000; // 60 seconds
-	if( console_prompt_int("Set time with GPS connected to UART1 (1=yes, 0=no)", 1, timeout) ) {
+	if( console_prompt_int("Set time with GPS connected to UART1 (1=yes, 0=no)", 0, timeout) ) {
 		fprintf(stdout, "\r\nLooking for GPS Time on UART1 (timeout in %d seconds)\r\n", gps_timeout );
 		while( gps_timeout ) {
-			ioport_toggle_pin_level(LED_PIN);
+			ioport_toggle_pin_level(LED1_PIN);
 			uint8_t str[128];
 			enum status_code status = uart_read_message_queue(GPS_PORT, str, 128);
 			// if a ZDA message is found, use it to set the time
@@ -126,7 +124,7 @@ int main (void)
 	} else {
 		gps_timeout = 0;
 	}
-	
+
 	// if no GPS message found 
 	if( gps_timeout == 0) {
 		fprintf(stdout, "No GPS Time message found.\r\n" );
@@ -140,11 +138,12 @@ int main (void)
 	// set the system RTC
 	setup_rtc(&rtc);
 	
+
 	/* Initialize SD MMC stack */
 	if(sd_card_init(&sd_card) != SD_MMC_OK) {
 		printf("Init SD Card Failed\n\r");
 	}
-		
+
 	// Show SD card info.
 	if(sd_card.state == SD_MMC_OK) {
 		sd_card_print_info(&sd_card);
@@ -166,7 +165,6 @@ int main (void)
 	if(Verbose) {
 		printf("sd start_addr %lu \n\r", sd_start_addr);
 		printf("sd end_addr %lu \n\r", sd_end_addr);
-		printf("nblocks_per_spi_buffer %lu \n\r", SPI_DATA_NBLOCKS);
 		printf("nblocks_per_adc_buffer %lu \n\r", AK5552_BUFFER_NBLOCKS);
 		printf("nblocks_per_upload %lu \n\r", nblocks_per_upload);
 	}
@@ -175,20 +173,22 @@ int main (void)
 	printf("sampling_rate %lu \n\r", sampling_rate);
  	printf("number_buffers_per_upload %lu \n\r", number_buffers_per_upload);
 
-	ioport_set_pin_level(PIN_ENABLE_ADC, 1); 
-	ioport_set_pin_level(PIN_ENABLE_TVDD, 1);
+	ioport_set_pin_level(PIN_ENABLE_ADC_PWR, 1);
+	ioport_set_pin_level(PIN_RESET_ADC_PDN, 1);
 //	ioport_set_pin_level(PIN_PREAMP_SHDN, 1);
 
-	ioport_set_pin_level(PIN_ENABLE_3V3_OUT, 0);
-	ioport_set_pin_level(PIN_ENABLE_5V_OUT, 0);
+	ioport_set_pin_level(PIN_ENABLE_PI_5V, 0);
+	ioport_set_pin_level(PIN_ENABLE_EXT_5V, 0);
 	
-	ioport_set_pin_level(LED_PIN, LED_ON);
+	ioport_set_pin_level(LED1_PIN, LED_ON);
 	delay_ms(1000);
 	
 	// start adc conversions and dma
 	ak5552_start_dma();
 	ak5552_start_conversion();
 	
+	ioport_set_pin_level(LED2_PIN, LED_OFF);
+
 	printf("Start read loop \n\r");
 	int go = 1;
 
@@ -202,10 +202,8 @@ int main (void)
 		
 		read_data();
 		
-		if( upload_data() == 0 ) {
-			// sleep between dma buffers, the next dma interrupt will wake from sleep
-			pmc_sleep(SAM_PM_SMODE_SLEEP_WFI);
-		}
+		// sleep between dma buffers, the next dma interrupt will wake from sleep
+		pmc_sleep(SAM_PM_SMODE_SLEEP_WFI);
 				
 	}
 
@@ -222,7 +220,7 @@ int read_data(void)
 
 		if( nsamps == AK5552_NUM_SAMPLES ) {
 
-			ioport_toggle_pin_level(LED_PIN);
+			ioport_toggle_pin_level(LED1_PIN);
 
 			int result = sd_card_write_raw(&sd_card, adc_buffer, AK5552_BUFFER_NBLOCKS, sd_write_addr);
 
@@ -247,86 +245,6 @@ int read_data(void)
 	return(nsamps);
 }
 
-int upload_data(void)
-{
-	// shutoff PI, but wait for the PI to signal that it's OK to shutdown power
-	// this happens after uploading has finished
-	if( pi_state == SHUTTING_DOWN ) {
-		if ( ioport_get_pin_level(PI_ON_PIN) == IOPORT_PIN_LEVEL_LOW ) {
-			printf("Shutting down PI.\r\n");
-			if(shutdown_pi_after_upload) ioport_set_pin_level(PIN_ENABLE_5V_OUT, 0);
-			pi_state = POWER_OFF;
-		}
-		return(0);
-	}
-	
-	// 
-	if ( (sys_state & UPLOADING) == 0 ) return(0);
-
-	if ( pi_state == POWER_OFF ) {
-		if ( ioport_get_pin_level(PI_ON_PIN) == IOPORT_PIN_LEVEL_LOW ) {
-			printf("Waking up PI ... ");
-			ioport_set_pin_level(PIN_ENABLE_5V_OUT, 1); // turn the PI ON
-			pi_state = BOOTING;
-		}
-		return(0);
-	}
-	
-	if ( pi_state == BOOTING)  {
-		if ( ioport_get_pin_level(PI_ON_PIN) == IOPORT_PIN_LEVEL_HIGH ) {
-			printf("ready.\r\n");
-			// initialize SPI slave to transfer data to the PI which is a spi master
-			spi_slave_initialize();
-			//delay_ms(100);
-			pi_state = READY;
-		}
-		return(0);
-	}
-	
-	// if PI is ready
-	if ( pi_state == READY ) {
-				
-		if( output_count == 0 ) {
-			printf("Starting upload to PI.\r\n");
-		}
-				
-		int result = sd_card_read_raw(&sd_card, spi_buffer_data, SPI_DATA_NBLOCKS, sd_read_addr);
-
-		if( result == SD_MMC_OK ) {
-					
-			ioport_toggle_pin_level(LED_PIN);
-					
-			update_spi_header(output_count + SPI_DATA_NBLOCKS);
-					
-			// write padded buffer to SPI port
-			result = spi_slave_write_wait((void *)spi_buffer, SPI_BUFFER_NBYTES);
-					
-			if( result == STATUS_OK ) {
-				sd_read_addr += SPI_DATA_NBLOCKS;
-				if(sd_read_addr >= sd_end_addr) sd_read_addr = sd_start_addr;
-				output_count += SPI_DATA_NBLOCKS;
-			} else {
-				printf("spi_slave_write_wait error 0x%x.\n\r", result);
-			}
-					
-			if( output_count == nblocks_per_upload ) {
-				printf("Finished uploading %lu blocks to PI.\n\r", output_count);
-				output_count = 0;
-				sys_state = READING;
-				pi_state = SHUTTING_DOWN;
-			}
-
-		}
-		
-		return(output_count);
-	}
-	
-	printf("Unknown state %d.\r\n", pi_state);
-	return(0);
-
-}
-
-
 static inline uint8_t checksum(uint8_t *data, uint32_t len)
 {
 	uint32_t nbytes = len;
@@ -334,32 +252,6 @@ static inline uint8_t checksum(uint8_t *data, uint32_t len)
 	uint8_t sum = 0;
 	while(nbytes--) sum += *buf++;
 	return(sum);
-}
-
-void update_spi_header(uint32_t count)
-{
-	
-	uint8_t chksum = checksum(spi_buffer_data, SPI_DATA_NBYTES);
-
-	spi_buffer_header[0] = 0; // padding
-	spi_buffer_header[1] = 1; // padding
-	spi_buffer_header[2] = 2; // padding
-	spi_buffer_header[3]  = chksum; //
-	spi_buffer_header[4]  = (uint8_t)(count >> 0);
-	spi_buffer_header[5]  = (uint8_t)(count >> 8);
-	spi_buffer_header[6]  = (uint8_t)(count >> 16);
-	spi_buffer_header[7] = (uint8_t)(count >> 24);
-	spi_buffer_header[8]  = (uint8_t)(nblocks_per_upload >> 0);
-	spi_buffer_header[9]  = (uint8_t)(nblocks_per_upload >> 8);
-	spi_buffer_header[10]  = (uint8_t)(nblocks_per_upload >> 16);
-	spi_buffer_header[11] = (uint8_t)(nblocks_per_upload >> 24);
-
-	//if(output_count == 0) {
-	//	for(uint16_t n = 0; n < 36; n++) printf("%d ", spi_buffer[n]);
-	//	printf("\r\n");
-	//	for(uint16_t n = SPI_BUFFER_NBYTES-36; n < SPI_BUFFER_NBYTES; n++) printf("%d ", spi_buffer[n]);
-	//	printf("\n");
-	//}
 }
 
 

@@ -59,6 +59,7 @@ extern void resetup_system_clocks(uint32_t sclk);
 #define PIN_PB4     IOPORT_CREATE_PIN(PIOB, 4)
 #define PIN_PB12     IOPORT_CREATE_PIN(PIOB, 12)
 #define PIN_PB13     IOPORT_CREATE_PIN(PIOB, 13)
+#define PIN_PB14     IOPORT_CREATE_PIN(PIOB, 14)
 
 
 #define PIN_PI_GPIO23    PIN_PA3
@@ -67,11 +68,6 @@ extern void resetup_system_clocks(uint32_t sclk);
 #define PIN_PI_GPIO27    PIN_PA7
 #define PIN_PI_GPIO22    PIN_PA8
 #define PIN_PI_GPIO7    PIN_PA24
-
-#define PIN_J5_2    PIN_PA4
-#define PIN_J5_3    PIN_PA1
-#define PIN_J5_4    PIN_PB12
-#define PIN_J5_5    PIN_PB13
 
 // Pins for testing only
 //#define SSC_ADC_BUF_PIN PIN_PI_GPIO23
@@ -83,22 +79,31 @@ extern void resetup_system_clocks(uint32_t sclk);
 #define SPI_SLAVE_READY_PIN PIN_PI_GPIO24
 #define SPI_MASTER_READY_PIN PIN_PI_GPIO25
 
-#define PIN_ENABLE_TVDD   PIN_PA21
-#define PIN_ENABLE_3V3_OUT   PIN_PA6
-#define PIN_ENABLE_5V_OUT   PIN_PA5
-#define PIN_ENABLE_ADC   PIN_PA23
+#define PIN_ENABLE_ADC_PWR  PIN_PA23
+#define PIN_RESET_ADC_PDN   PIN_PA21
+#define PIN_ENABLE_PI_5V    PIN_PA3
+#define PIN_ENABLE_EXT_5V   PIN_PA2
 
-#define PIN_PREAMP_SHDN PIN_J5_2
-#define PIN_PREAMP_G1 PIN_J5_3
-#define PIN_PREAMP_G0 PIN_J5_4
+#define PIN_SELECT_SD   PIN_PA6
+#define SELECT_SD1   0
+#define SELECT_SD2   1
+
+#define PIN_ENABLE_SD1   PIN_PA5
+#define PIN_ENABLE_SD2   PIN_PA4
+
+#define PIN_PREAMP_SHDN PIN_PA25
+#define PIN_PREAMP_G1 PIN_PB13
+#define PIN_PREAMP_G0 PIN_PB14
 
 // LED definitions
-#define LED_PIN             PIN_PA22
+#define LED1_PIN             PIN_PA22
+#define LED2_PIN             PIN_PA7
+#define LED3_PIN             PIN_PA8
 #define LED_ON              true
 #define LED_OFF             !LED_ON
 
 //! Number of on-board LEDs
-#define LED_COUNT 1
+#define LED_COUNT 3
 
 //! Number of on-board buttons
 #define BUTTON_COUNT              0
@@ -133,22 +138,28 @@ extern void resetup_system_clocks(uint32_t sclk);
 #define PINS_HSMCI   {0x3fUL << 26, PIOA, ID_PIOA, PIO_PERIPH_C, PIO_PULLUP}
 /** HSMCI MCCDA pin definition. */
 #define PIN_HSMCI_MCCDA_GPIO            (PIO_PA28_IDX)
-#define PIN_HSMCI_MCCDA_FLAGS           (PIO_PERIPH_C | PIO_DEFAULT)
+//#define PIN_HSMCI_MCCDA_FLAGS           (PIO_PERIPH_C | PIO_DEFAULT)
+#define PIN_HSMCI_MCCDA_FLAGS           (PIO_PERIPH_C | PIO_PULLUP)
 /** HSMCI MCCK pin definition. */
 #define PIN_HSMCI_MCCK_GPIO             (PIO_PA29_IDX)
 #define PIN_HSMCI_MCCK_FLAGS            (PIO_PERIPH_C | PIO_DEFAULT)
+//#define PIN_HSMCI_MCCK_FLAGS            (PIO_PERIPH_C | PIO_PULLUP)
 /** HSMCI MCDA0 pin definition. */
 #define PIN_HSMCI_MCDA0_GPIO            (PIO_PA30_IDX)
-#define PIN_HSMCI_MCDA0_FLAGS           (PIO_PERIPH_C | PIO_DEFAULT)
+//#define PIN_HSMCI_MCDA0_FLAGS           (PIO_PERIPH_C | PIO_DEFAULT)
+#define PIN_HSMCI_MCDA0_FLAGS           (PIO_PERIPH_C | PIO_PULLUP)
 /** HSMCI MCDA1 pin definition. */
 #define PIN_HSMCI_MCDA1_GPIO            (PIO_PA31_IDX)
-#define PIN_HSMCI_MCDA1_FLAGS           (PIO_PERIPH_C | PIO_DEFAULT)
+//#define PIN_HSMCI_MCDA1_FLAGS           (PIO_PERIPH_C | PIO_DEFAULT)
+#define PIN_HSMCI_MCDA1_FLAGS           (PIO_PERIPH_C | PIO_PULLUP)
 /** HSMCI MCDA2 pin definition. */
 #define PIN_HSMCI_MCDA2_GPIO            (PIO_PA26_IDX)
-#define PIN_HSMCI_MCDA2_FLAGS           (PIO_PERIPH_C | PIO_DEFAULT)
+//#define PIN_HSMCI_MCDA2_FLAGS           (PIO_PERIPH_C | PIO_DEFAULT)
+#define PIN_HSMCI_MCDA2_FLAGS           (PIO_PERIPH_C | PIO_PULLUP)
 /** HSMCI MCDA3 pin definition. */
 #define PIN_HSMCI_MCDA3_GPIO            (PIO_PA27_IDX)
-#define PIN_HSMCI_MCDA3_FLAGS           (PIO_PERIPH_C | PIO_DEFAULT)
+//#define PIN_HSMCI_MCDA3_FLAGS           (PIO_PERIPH_C | PIO_DEFAULT)
+#define PIN_HSMCI_MCDA3_FLAGS           (PIO_PERIPH_C | PIO_PULLUP)
 /** SD/MMC card detect pin definition. */
 
 /** SSC pin Receiver Data (RD) */
