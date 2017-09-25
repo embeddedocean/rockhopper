@@ -562,6 +562,7 @@ static bool sdio_op_cond(void)
 	resp = driver_get_response();
 	if ((resp & OCR_SDIO_NF) == 0) {
 		return true; // No error but card type not updated
+		
 	}
 
 	/*

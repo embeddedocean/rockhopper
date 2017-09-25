@@ -49,17 +49,19 @@ uint32_t ssc_adc_date2 = 0;
 
 uint8_t ak5552_settings = 0;
 
-int ak5552_init(uint32_t *fs)
+int ak5552_init(uint32_t audio_mode, uint32_t bits, uint8_t mclk_mode, uint32_t mclk_freq_div, uint32_t *fs)
 {	
 	/* Initialize the SSC module */
 	pmc_enable_periph_clk(ID_SSC);
 	ssc_reset(SSC);
 	
+	ssc_i2s_set_receiver(SSC, SSC_I2S_SLAVE_IN, SSC_RCMR_CKS_RK, audio_mode, bits);
+
 	// Right channel is AIN2
 	//ssc_i2s_set_receiver(SSC, SSC_I2S_SLAVE_IN, SSC_RCMR_CKS_RK, SSC_AUDIO_MONO_RIGHT, AK5552_BITS_PER_SAMPLE);
 	
 	// Left channel is AIN1
-	ssc_i2s_set_receiver(SSC, SSC_I2S_SLAVE_IN, SSC_RCMR_CKS_RK, SSC_AUDIO_MONO_LEFT, AK5552_BITS_PER_SAMPLE);
+	//ssc_i2s_set_receiver(SSC, SSC_I2S_SLAVE_IN, SSC_RCMR_CKS_RK, SSC_AUDIO_MONO_LEFT, AK5552_BITS_PER_SAMPLE);
 	//ssc_i2s_set_receiver(SSC, SSC_I2S_SLAVE_IN, SSC_RCMR_CKS_RK, SSC_AUDIO_MONO_LEFT, 32);
 
 	//ssc_i2s_set_receiver(SSC, SSC_I2S_SLAVE_IN, SSC_RCMR_CKS_RK, SSC_AUDIO_STERO, AK5552_SAMPLE_SIZE);
@@ -69,7 +71,26 @@ int ak5552_init(uint32_t *fs)
 
 	/* TESTING ONLY - Enable the loop mode. */
 	//ssc_set_loop_mode(SSC);
+	
+	int ret = 0;
+	
+	if(mclk_mode == AK5552_INT_MCLK) {
+		ret = ak5553_config_internal_mclk(mclk_freq_div, fs);
+	} else if(mclk_mode == AK5552_EXT_MCLK) {
+		ret = ak5553_config_external_mclk(mclk_freq_div, fs);
+	} else {
+		printf("ak5552_init: unknown mclk mode\n\r");
+	}
+	
+	return(ret);
 
+}
+
+//
+// Configure TC0 to supply MCLK for the ADC
+//  
+int ak5553_config_internal_mclk(uint32_t mclk_freq_div, uint32_t *fs)
+{
 	// Configure TC TC_CHANNEL_WAVEFORM in waveform operating mode.
 	//see: http://www.allaboutcircuits.com/projects/dma-digital-to-analog-conversion-with-a-sam4s-microcontroller-the-timer-cou/
 
@@ -77,10 +98,6 @@ int ak5552_init(uint32_t *fs)
 	uint16_t dutycycle = 50; /** Duty cycle in percent (positive).*/
 
 	/* Configure PIO Pins for TC */
-	//ioport_set_pin_mode(PIN_TC0_TIOB0, PIN_TC0_TIOB0_MUX);
-	/* Disable IO to enable peripheral mode) */
-	//ioport_disable_pin(PIN_TC0_TIOB0);
-
 	ioport_set_pin_mode(PIN_TC0_TIOA0, PIN_TC0_TIOA0_MUX);
 	/* Disable IO to enable peripheral mode) */
 	ioport_disable_pin(PIN_TC0_TIOA0);
@@ -98,8 +115,8 @@ int ak5552_init(uint32_t *fs)
 	  | TC_CMR_ACPC_TOGGLE	//toggle TIOA on RC match
 	);
 	
-	// desired mclk  using 32fs (hex speed) setting on CKS0-3 pins
-	uint32_t mclk = *fs * 32;  
+	// desired mclk using setting on CKS0-3 pins
+	uint32_t mclk = *fs * mclk_freq_div;  
 
 	/* Configure waveform frequency and duty cycle. */
 	sck = sysclk_get_peripheral_bus_hz(TC0);
@@ -112,14 +129,73 @@ int ak5552_init(uint32_t *fs)
 	//tc_write_rb(TC0, 0, ra);
 
 	// actual sampling freq
-	*fs = mclk / 32;
+	*fs = mclk / mclk_freq_div;
 	ssc_adc_sampling_freq = *fs;
 
-	printf("TC0 configuration: sysclk = %lu, mclk = %lu (ra=%lu,rc=%lu)\n\r", sck, mclk, ra, rc);
+	printf("INT TC0 configuration: sysclk = %lu, mclk = %lu (ra=%lu,rc=%lu)\n\r", sck, mclk, ra, rc);
 	
 	return(1);
 }
 
+//
+// Configure external MCLK for AK5552
+// This uses the TC to count cycles and measure the frequency of the external clock
+// If there was a very actuate external clock this would not be necessary
+// Make sure the external clock is jumpered back onto the TIO line in addition to going to the ADC
+//
+int ak5553_config_external_mclk(uint32_t mclk_freq_div, uint32_t *fs)
+{
+	// Configure TC TC_CHANNEL_WAVEFORM in waveform operating mode.
+	//see: http://www.allaboutcircuits.com/projects/dma-digital-to-analog-conversion-with-a-sam4s-microcontroller-the-timer-cou/
+
+	uint16_t dutycycle = 50; /** Duty cycle in percent (positive).*/
+
+	/* Configure PIO Pins for TC */
+	ioport_set_pin_mode(PIN_TC0_TIOA0, PIN_TC0_TIOA0_MUX);
+	/* Disable IO to enable peripheral mode */
+	ioport_set_pin_dir(PIN_TC0_TIOA0, IOPORT_DIR_INPUT);
+	ioport_disable_pin(PIN_TC0_TIOA0);
+	
+	/* Configure the PMC to enable the TC module. */
+	sysclk_enable_peripheral_clock(ID_TC0);
+
+	/* Init TC to waveform mode. */
+	tc_init(TC0, 0,
+	    TC_CMR_TCCLKS_TIMER_CLOCK1 |    //Timer clock = sysclk/2
+	    TC_CMR_ABETRG |                 //TIOA external trigger
+	    TC_CMR_ETRGEDG_RISING |         //External trigger on rising edge
+	    TC_CMR_LDRA_RISING            //Load RA on rising edge (period measurement) OR
+	    //TC_CMR_LDRA_FALLING         //Load RA on falling edge (width measurement)
+	);
+
+	tc_start(TC0, 0);
+	delay_ms(500);  // needs to be here
+
+    //Timer resolution
+	uint32_t period = 0;
+	uint32_t count = 0;
+    while(count < 100) {
+	    //If capture has occurred
+	    if(tc_get_status(TC0,0) & TC_SR_LDRAS) {
+		    //Format string
+		    period += tc_read_ra(TC0, 0);
+		    //Repeat delay
+		    //delay_ms(10);
+			count++;
+	    }
+    }
+		
+	uint32_t sclk = sysclk_get_peripheral_bus_hz(TC0);
+	uint32_t mclk = ((sclk / 2) / period) * count;
+		
+	// actual sampling freq
+	*fs = mclk / mclk_freq_div;
+	ssc_adc_sampling_freq = *fs;
+
+	printf("EXT MCLK configuration: sclk = %lu, mclk = %lu (period = %lu, count = %lu)\n\r", sclk, mclk, period, count);
+	
+	return(1);
+}
 
 void ak5552_start_conversion(void)
 {

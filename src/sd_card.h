@@ -25,13 +25,13 @@ typedef struct {
 	uint32_t last_block;    // addr of last block
 	//uint32_t write_start_addr;    // addr of current write block
 	//uint32_t read_start_addr;    // addr of current read block
-} sd_card_info_t;
+} sd_card_t;
 
 
-extern int sd_card_init(sd_card_info_t *sd);
-extern void sd_card_print_info(sd_card_info_t *sd);
-extern int sd_card_write_raw(sd_card_info_t *sd, uint8_t *buffer, uint16_t nblocks, uint32_t addr);
-extern int sd_card_read_raw(sd_card_info_t *sd, uint8_t *buffer, uint16_t nblocks, uint32_t addr);
+extern int sd_card_init(sd_card_t *sd);
+extern void sd_card_get_info(sd_card_t *sd);
+extern int sd_card_write_raw(sd_card_t *sd, uint8_t *buffer, uint16_t nblocks, uint32_t addr);
+extern int sd_card_read_raw(sd_card_t *sd, uint8_t *buffer, uint16_t nblocks, uint32_t addr);
 
 //extern int sd_card_init_fat(void);
 //extern FRESULT sd_card_open_file(char *filename);

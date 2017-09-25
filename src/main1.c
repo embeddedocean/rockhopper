@@ -27,11 +27,6 @@ uint32_t upload_interval_in_minutes = 60;
 
 uint32_t number_buffers_per_upload = 512;
 
-int read_data(void);
-int upload_data(void);
-void update_spi_header(uint32_t count);
-
-sd_card_info_t sd_card;
 uint32_t sd_write_addr = SD_CARD_START_BLOCK;
 uint32_t sd_read_addr = SD_CARD_START_BLOCK;
 uint32_t sd_start_addr = SD_CARD_START_BLOCK;
@@ -39,30 +34,31 @@ uint32_t sd_end_addr =  0;
 	
 // nblocks_per_sector must be and even multiple of nblocks_per_buffer
 uint32_t nblocks_per_upload = 1024 * AK5552_BUFFER_NBLOCKS;
-uint32_t input_count = 0;
-uint32_t output_count = 0;
-uint8_t upload_to_pi = 0;
+uint32_t write_count = 0;
 
 uint8_t shutdown_pi_after_upload = 1;
 
-#define READING 0x01
-#define UPLOADING 0x02
-#define POWER_OFF 0x10
+#define READING_ADC 0x01
+#define WRITING_SD1 0x02
+#define WRITING_SD2 0x04
+#define _POWER_OFF 0x10
 #define READY 0x20
 #define BOOTING 0x40
 #define SHUTTING_DOWN 0x80
 
-uint8_t sys_state = READING;
-uint8_t pi_state = POWER_OFF;
+//uint8_t sys_state = READING;
+//uint8_t pi_state = POWER_OFF;
 
 #define GPS_PORT 1
 #define GPS_UART_BAUDRATE 38400
+
+// local function prototypes
+sd_card_t *select_sd_card(uint8_t card_num);
 
 int main (void)
 {
 	int result = 0;
 
-	uint32_t main_clk = 120000000;
 	sysclk_init();	
 	board_init();
 
@@ -71,19 +67,13 @@ int main (void)
 
 	ioport_set_pin_level(LED2_PIN, LED_ON);
 
-	// select and enable SD1
-	ioport_set_pin_level(PIN_ENABLE_SD1, 0);
-	delay_ms(1000);
-	ioport_set_pin_level(PIN_SELECT_SD, SELECT_SD1);
-	delay_ms(1000);
-
 	/* Output header string  */
     fprintf(stdout, "-- RockHopper V2.0 --\r\n" );
 	fprintf(stdout, "-- Compiled: "__DATE__ " "__TIME__ " --\r\n");
 
 	// configuration prompt
 	int timeout = 10;
-	fprintf(stdout, "\r\nEnter configuration or hit Enter to accept default values\r\n" );
+	fprintf(stdout, "\r\nEnter configuration or hit Enter to accept default values\r\n" ); 
 	fprintf(stdout, "Prompt will timeout in %d seconds.\r\n", timeout );
 
 	// read sampling rate
@@ -138,19 +128,32 @@ int main (void)
 	// set the system RTC
 	setup_rtc(&rtc);
 	
-
 	/* Initialize SD MMC stack */
-	if(sd_card_init(&sd_card) != SD_MMC_OK) {
-		printf("Init SD Card Failed\n\r");
-	}
+	sd_mmc_init();
 
-	// Show SD card info.
-	if(sd_card.state == SD_MMC_OK) {
-		sd_card_print_info(&sd_card);
-	}
+	// active sd card pointer
+	sd_card_t *active_sd_card = NULL;
 
-	// initialize adc	
-	ak5552_init(&sampling_rate);
+	// Select SD2
+	active_sd_card = select_sd_card(2);
+	// Show SD2 card info.
+	sd_card_get_info(active_sd_card);
+
+	// Select SD1
+	select_sd_card(1);
+	// Show SD1 card info.
+	sd_card_get_info(active_sd_card);
+
+	uint8_t sd_card_number = 1;
+
+	// power up and initialize adc	
+	ioport_set_pin_level(PIN_ENABLE_ADC_PWR, 1);
+	ioport_set_pin_level(PIN_RESET_ADC_PDN, 1);
+	//	ioport_set_pin_level(PIN_PREAMP_SHDN, 1);
+
+	ak5552_init(SSC_AUDIO_MONO_LEFT, 24, AK5552_INT_MCLK, AK5552_MCLK_32FS, &sampling_rate);
+//	ak5552_init(SSC_AUDIO_MONO_LEFT, 24, AK5552_EXT_MCLK, AK5552_MCLK_32FS, &sampling_rate);
+
 	printf("ADC Initialized: fs = %lu\n\r", sampling_rate);
 
 	printf("Init SSC DMA\n\r");
@@ -159,8 +162,8 @@ int main (void)
 	float buffer_duration =  (float)AK5552_NUM_SAMPLES / (float)sampling_rate;
 	number_buffers_per_upload = (uint32_t)(60.0f * (float)upload_interval_in_minutes / buffer_duration);
 	nblocks_per_upload = number_buffers_per_upload * AK5552_BUFFER_NBLOCKS;
-	sd_end_addr = sd_card.last_block;
-	sd_start_addr = sd_card.first_block;
+	sd_end_addr = active_sd_card->last_block;
+	sd_start_addr = active_sd_card->first_block;
 
 	if(Verbose) {
 		printf("sd start_addr %lu \n\r", sd_start_addr);
@@ -172,10 +175,6 @@ int main (void)
 	//printf("buffer_duration %f \n\r", buffer_duration);
 	printf("sampling_rate %lu \n\r", sampling_rate);
  	printf("number_buffers_per_upload %lu \n\r", number_buffers_per_upload);
-
-	ioport_set_pin_level(PIN_ENABLE_ADC_PWR, 1);
-	ioport_set_pin_level(PIN_RESET_ADC_PDN, 1);
-//	ioport_set_pin_level(PIN_PREAMP_SHDN, 1);
 
 	ioport_set_pin_level(PIN_ENABLE_PI_5V, 0);
 	ioport_set_pin_level(PIN_ENABLE_EXT_5V, 0);
@@ -195,12 +194,37 @@ int main (void)
 	// throw away the first adc buffer
 	while( ak5552_read_dma(adc_buffer_header, adc_buffer_data) == 0 ) {}
 
-	sys_state = READING;
-	pi_state = POWER_OFF;
-
 	while (go) {
 		
-		read_data();
+		nsamps = ak5552_read_dma(adc_buffer_header, adc_buffer_data);
+
+		if( nsamps == AK5552_NUM_SAMPLES ) {
+
+			ioport_toggle_pin_level(LED1_PIN);
+
+			result = sd_card_write_raw(active_sd_card, adc_buffer, AK5552_BUFFER_NBLOCKS, sd_write_addr);
+
+			if( result == SD_MMC_OK ) {
+				sd_write_addr +=  AK5552_BUFFER_NBLOCKS;
+				if(sd_write_addr >= sd_end_addr) sd_write_addr = sd_start_addr;
+				write_count += AK5552_BUFFER_NBLOCKS;
+			} else {
+				printf("sd_card_write_raw: 0x%x.\n\r", result);
+			}
+			
+			if( write_count == nblocks_per_upload ) {
+				write_count = 0;  // reset counter
+				// switch sd cards
+				if(sd_card_number == 1 ) {
+					sd_card_number = 2;
+					active_sd_card = select_sd_card(2);
+				} else {
+					sd_card_number = 1;
+					active_sd_card = select_sd_card(1);
+				}
+				// start PI ....
+			}
+		}
 		
 		// sleep between dma buffers, the next dma interrupt will wake from sleep
 		pmc_sleep(SAM_PM_SMODE_SLEEP_WFI);
@@ -209,40 +233,50 @@ int main (void)
 
 }
 
+// 
+// select the sd card and disable the other
+// 
+#define sd_startup_delay_msec  1  
 
-int read_data(void)
-{	
-	uint16_t nsamps = 0;
+// sd card objects
+sd_card_t sd_card1;
+sd_card_t sd_card2;
+
+sd_card_t *select_sd_card(uint8_t card_num)
+{
+	sd_card_t *sd = NULL;
 	
-	if( sys_state & READING ) {
-		
-		nsamps = ak5552_read_dma(adc_buffer_header, adc_buffer_data);
-
-		if( nsamps == AK5552_NUM_SAMPLES ) {
-
-			ioport_toggle_pin_level(LED1_PIN);
-
-			int result = sd_card_write_raw(&sd_card, adc_buffer, AK5552_BUFFER_NBLOCKS, sd_write_addr);
-
-			if( result == SD_MMC_OK ) {
-				sd_write_addr +=  AK5552_BUFFER_NBLOCKS;
-				if(sd_write_addr >= sd_end_addr) sd_write_addr = sd_start_addr;
-				input_count += AK5552_BUFFER_NBLOCKS;
-			} else {
-				printf("sd_card_write_raw: 0x%x.\n\r", result);
-			}
-			
-			if( input_count == nblocks_per_upload ) {
-				input_count = 0;
-				//sys_state = READING & UPLOADING; // continue reading while uploading
-				sys_state = UPLOADING;  // stop reading while uploading
-				printf("Ready to upload %lu blocks: read addr 0x%x, write addr 0x%x.\n\r",
-				   nblocks_per_upload, sd_read_addr, sd_write_addr);
-			}
+	if(card_num == 2) {
+		printf("Enabling SD2 Card: ");
+		// select and enable SD2
+		ioport_set_pin_level(PIN_ENABLE_SD2, SD_ENABLE);
+		ioport_set_pin_level(PIN_ENABLE_SD1, SD_DISABLE);
+		if(sd_startup_delay_msec) delay_ms(sd_startup_delay_msec);
+		ioport_set_pin_level(PIN_SELECT_SD, SELECT_SD2);
+		if(sd_card_init(&sd_card2) == SD_MMC_OK) {
+			sd = &sd_card2;
+			printf("done\n\r");
+		} else {
+			printf("Failed\n\r");
 		}
+	} else if(card_num == 1) {
+		// select and enable SD1
+		printf("Enabling SD1 Card: ");
+		ioport_set_pin_level(PIN_ENABLE_SD1, SD_ENABLE);
+		ioport_set_pin_level(PIN_ENABLE_SD2, SD_DISABLE);
+		if(sd_startup_delay_msec) delay_ms(sd_startup_delay_msec);
+		ioport_set_pin_level(PIN_SELECT_SD, SELECT_SD1);
+		if(sd_card_init(&sd_card1) == SD_MMC_OK) {
+			sd = &sd_card1;
+			printf("done\n\r");
+		} else {
+			printf("Failed\n\r");
+		}
+	} else {
+		printf("Unknown SD number: select SD Card Failed\n\r");
 	}
-	
-	return(nsamps);
+
+	return(sd);
 }
 
 static inline uint8_t checksum(uint8_t *data, uint32_t len)

@@ -88,8 +88,11 @@ extern void resetup_system_clocks(uint32_t sclk);
 #define SELECT_SD1   0
 #define SELECT_SD2   1
 
+// PIN to turn SD power on/off
 #define PIN_ENABLE_SD1   PIN_PA5
 #define PIN_ENABLE_SD2   PIN_PA4
+#define SD_ENABLE   0
+#define SD_DISABLE  1
 
 #define PIN_PREAMP_SHDN PIN_PA25
 #define PIN_PREAMP_G1 PIN_PB13
@@ -135,6 +138,7 @@ extern void resetup_system_clocks(uint32_t sclk);
 /*! Number of slot connected on HSMCI interface */
 #define SD_MMC_HSMCI_MEM_CNT      1
 #define SD_MMC_HSMCI_SLOT_0_SIZE  4
+//#define SD_MMC_HSMCI_SLOT_1_SIZE  4
 #define PINS_HSMCI   {0x3fUL << 26, PIOA, ID_PIOA, PIO_PERIPH_C, PIO_PULLUP}
 /** HSMCI MCCDA pin definition. */
 #define PIN_HSMCI_MCCDA_GPIO            (PIO_PA28_IDX)
@@ -147,7 +151,7 @@ extern void resetup_system_clocks(uint32_t sclk);
 /** HSMCI MCDA0 pin definition. */
 #define PIN_HSMCI_MCDA0_GPIO            (PIO_PA30_IDX)
 //#define PIN_HSMCI_MCDA0_FLAGS           (PIO_PERIPH_C | PIO_DEFAULT)
-#define PIN_HSMCI_MCDA0_FLAGS           (PIO_PERIPH_C | PIO_PULLUP)
+#define PIN_HSMCI_MCDA0_FLAGS           (PIO_PERIPH_C | PIO_PULLUP) 
 /** HSMCI MCDA1 pin definition. */
 #define PIN_HSMCI_MCDA1_GPIO            (PIO_PA31_IDX)
 //#define PIN_HSMCI_MCDA1_FLAGS           (PIO_PERIPH_C | PIO_DEFAULT)

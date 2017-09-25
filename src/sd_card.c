@@ -19,80 +19,63 @@ extern uint8_t Verbose;
  * Configure the PIO as inputs and generate corresponding interrupt when
  * pressed or released.
  */
-int sd_card_init(sd_card_info_t *sd_card)
+int sd_card_init(sd_card_t *sd_card)
 {
-	sd_mmc_err_t card_check;
+	uint8_t slot = 0;  
 	
+	//hsmci_init();
 	sd_mmc_init();	
 
-	// Is SD card present?
-//	if (gpio_pin_is_low(SD_MMC_0_CD_GPIO) == false) {
-//		printf("Please insert SD card...\r\n");
-//		sd_card->state = SD_MMC_ERR_NO_CARD;
-//		return(SD_MMC_ERR_NO_CARD);
-//	}
-
-	//sd_mmc_init();
-	card_check = sd_mmc_check(0);
+	sd_card->state = sd_mmc_check(slot);
 	int count = 0;
-	while (card_check != SD_MMC_OK  && count < 10) {
-		card_check = sd_mmc_check(0);
-		if(Verbose) printf("Checking SD\r\n");
+	while (sd_card->state != SD_MMC_OK  && count < 4) {
+		sd_card->state = sd_mmc_check(slot);
 		delay_ms(1000);
 		count++;
 	}
+	sd_card->slot = slot;
+	sd_card->block_size = SD_MMC_BLOCK_SIZE;
+	sd_card->first_block = SD_CARD_START_BLOCK;
 
-	if (card_check == SD_MMC_OK) {
-		sd_card->slot = 0;
-		sd_card->state = SD_MMC_OK;
-		sd_card->type = sd_mmc_get_type(0);
-		sd_card->version = sd_mmc_get_version(0);
-		sd_card->capacity = sd_mmc_get_capacity(0);  // capacity in KBytes
-		sd_card->block_size = SD_MMC_BLOCK_SIZE;
-		sd_card->first_block = SD_CARD_START_BLOCK;
-		sd_card->last_block = sd_mmc_get_capacity(0) * (1024 / SD_MMC_BLOCK_SIZE);
-		if(Verbose) printf("SD Card Initialized\r\n");
-	} else {
-		sd_card->state = card_check;
-		if(Verbose) printf("SD Card Initialization failed, %d\r\n", card_check);
+	if(sd_card->state != SD_MMC_OK) {
+		if(Verbose) printf("SD Card Initialization failed, 0x%x\r\n", sd_card->state);
 	}
 	
-	// spi data ready pin
-//	ioport_set_pin_dir(SD_CARD_RD_PIN, IOPORT_DIR_OUTPUT);
-//	ioport_set_pin_dir(SD_CARD_WR_PIN, IOPORT_DIR_OUTPUT);
-//	ioport_set_pin_level(SD_CARD_RD_PIN, 0);
-//	ioport_set_pin_level(SD_CARD_WR_PIN, 0);
-
-	return(card_check);
+	return(sd_card->state);
 }
 
-void sd_card_print_info(sd_card_info_t *sd_card)
+void sd_card_get_info(sd_card_t *sd_card)
 {
 	if(sd_card->state != SD_MMC_OK) {
 		if(Verbose) printf("SD card NOT OK:\r\n");
 		return;	
 	}
+	 uint8_t slot = sd_card->slot;
+	sd_card->type = sd_mmc_get_type(slot);
+	sd_card->version = sd_mmc_get_version(slot);
+	sd_card->capacity = sd_mmc_get_capacity(slot);  // capacity in KBytes
+	sd_card->last_block = sd_card->capacity * (1024 / SD_MMC_BLOCK_SIZE);
 	
-	if(Verbose) printf("SD card information:\r\n");
-
-	// Card type
-	switch(sd_card->type)
-	{
-		case CARD_TYPE_SD:
-		if(Verbose) printf("- Type: Normal SD card\r\n");
-		break;
-		case (CARD_TYPE_HC | CARD_TYPE_SD):
-		if(Verbose) printf("- Type: SD High Capacity card\r\n");
-		break;
-		default:
-		if(Verbose) printf("- Type: unknown, %d\r\n", sd_card->type);
+	if(Verbose) {
+		printf("SD card information:\r\n");
+		switch(sd_card->type)
+		{
+			case CARD_TYPE_SD:
+			printf("- Type: Normal SD card\r\n");
+			break;
+			case (CARD_TYPE_HC | CARD_TYPE_SD):
+			printf("- Type: SD High Capacity card\r\n");
+			break;
+			default:
+			printf("- Type: unknown, %d\r\n", sd_card->type);
+		}
+		printf("- Total size: %lu KB\r\n", sd_card->capacity);
+		printf("- Version: %d\r\n", sd_card->version);
 	}
-	if(Verbose) printf("- Total size: %lu KB\r\n", sd_card->capacity);
-	if(Verbose) printf("- Version: %d\r\n", sd_card->version);
 }
 
 
-int sd_card_write_raw(sd_card_info_t *sd_card, uint8_t *buffer, uint16_t nblocks, uint32_t addr)
+int sd_card_write_raw(sd_card_t *sd_card, uint8_t *buffer, uint16_t nblocks, uint32_t addr)
 {
 	sd_mmc_err_t ret = 0;
 	
@@ -130,7 +113,7 @@ int sd_card_write_raw(sd_card_info_t *sd_card, uint8_t *buffer, uint16_t nblocks
 }
 
 
-int sd_card_read_raw(sd_card_info_t *sd_card, uint8_t *buffer, uint16_t nblocks, uint32_t addr)
+int sd_card_read_raw(sd_card_t *sd_card, uint8_t *buffer, uint16_t nblocks, uint32_t addr)
 {
 	sd_mmc_err_t ret = 0;
 	
@@ -211,4 +194,3 @@ int sd_card_write_file(uint8_t *buffer, uint16_t nblocks)
 	
 }
 */
-
